@@ -1,0 +1,12 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+
+.DS_Store
+
+**/build/
+**/out/
+
+.gradle-cache/

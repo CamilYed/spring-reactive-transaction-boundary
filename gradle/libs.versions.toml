@@ -1,0 +1,22 @@
+[versions]
+junit = "6.1.0"
+assertj = "3.27.7"
+reactor = "3.7.9"
+spring-framework = "6.2.10"
+spotless = "8.7.0"
+jacoco = "0.8.15"
+
+[plugins]
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+
+[libraries]
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+
+reactor-core = { module = "io.projectreactor:reactor-core", version.ref = "reactor" }
+reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "reactor" }
+
+spring-tx = { module = "org.springframework:spring-tx", version.ref = "spring-framework" }

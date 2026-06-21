@@ -1,20 +1,18 @@
 package io.github.softwarej.transaction.spring;
 
+import static io.github.softwarej.transaction.spring.testing.assertions.TransactionDefinitionAssertions.assertThatTransactionDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.softwarej.transaction.Isolation;
+import io.github.softwarej.transaction.Propagation;
 import io.github.softwarej.transaction.TransactionOptions;
-import java.util.Objects;
+import io.github.softwarej.transaction.spring.testing.fakes.RecordingReactiveTransactionManager;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
-import org.springframework.transaction.ReactiveTransaction;
-import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.DefaultTransactionDefinition;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -113,99 +111,101 @@ class SpringReactiveTransactionTest {
     assertThat(transactionManager.rolledBackTransactions()).isEqualTo(1);
   }
 
-  private static final class RecordingReactiveTransactionManager
-      implements ReactiveTransactionManager {
+  @Test
+  void shouldApplyDefaultTransactionOptionsToSpringTransactionDefinition() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
 
-    private final AtomicInteger startedTransactions = new AtomicInteger();
-    private final AtomicInteger committedTransactions = new AtomicInteger();
-    private final AtomicInteger rolledBackTransactions = new AtomicInteger();
+    // when
+    var result =
+        transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.just("result"));
 
-    @Override
-    public @NonNull Mono<ReactiveTransaction> getReactiveTransaction(
-        @Nullable TransactionDefinition definition) {
-      return Mono.fromSupplier(
-          () -> {
-            startedTransactions.incrementAndGet();
+    // then
+    StepVerifier.create(result).expectNext("result").verifyComplete();
 
-            TransactionDefinition effectiveDefinition =
-                definition != null ? definition : new DefaultTransactionDefinition();
-
-            return new RecordingReactiveTransaction(effectiveDefinition);
-          });
-    }
-
-    @Override
-    public @NonNull Mono<Void> commit(@NonNull ReactiveTransaction transaction) {
-      Objects.requireNonNull(transaction, "transaction must not be null");
-
-      return Mono.fromRunnable(
-          () -> {
-            committedTransactions.incrementAndGet();
-            ((RecordingReactiveTransaction) transaction).complete();
-          });
-    }
-
-    @Override
-    public @NonNull Mono<Void> rollback(@NonNull ReactiveTransaction transaction) {
-      Objects.requireNonNull(transaction, "transaction must not be null");
-
-      return Mono.fromRunnable(
-          () -> {
-            rolledBackTransactions.incrementAndGet();
-            ((RecordingReactiveTransaction) transaction).complete();
-          });
-    }
-
-    int startedTransactions() {
-      return startedTransactions.get();
-    }
-
-    int committedTransactions() {
-      return committedTransactions.get();
-    }
-
-    int rolledBackTransactions() {
-      return rolledBackTransactions.get();
-    }
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED)
+        .isReadWrite()
+        .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
   }
 
-  private static final class RecordingReactiveTransaction implements ReactiveTransaction {
+  @Test
+  void shouldApplyTransactionOptionsToSpringTransactionDefinition() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
 
-    private final TransactionDefinition definition;
-    private boolean rollbackOnly;
-    private boolean completed;
+    var options =
+        TransactionOptions.defaults()
+            .withIsolation(Isolation.SERIALIZABLE)
+            .withPropagation(Propagation.REQUIRES_NEW)
+            .withReadOnly()
+            .withTimeout(Duration.ofSeconds(5));
 
-    private RecordingReactiveTransaction(TransactionDefinition definition) {
-      this.definition = definition;
-    }
+    // when
+    var result = transaction.inTransaction(options, () -> Mono.just("result"));
 
-    @Override
-    public @org.jspecify.annotations.Nullable String getTransactionName() {
-      return definition.getName();
-    }
+    // then
+    StepVerifier.create(result).expectNext("result").verifyComplete();
 
-    @Override
-    public boolean isReadOnly() {
-      return definition.isReadOnly();
-    }
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
+        .isReadOnly()
+        .hasTimeout(5);
+  }
 
-    @Override
-    public void setRollbackOnly() {
-      this.rollbackOnly = true;
-    }
+  @Test
+  void shouldRoundTimeoutUpToFullSeconds() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
 
-    @Override
-    public boolean isRollbackOnly() {
-      return rollbackOnly;
-    }
+    var options = TransactionOptions.defaults().withTimeout(Duration.ofMillis(1500));
 
-    @Override
-    public boolean isCompleted() {
-      return completed;
-    }
+    // when
+    var result = transaction.inTransaction(options, () -> Mono.just("result"));
 
-    private void complete() {
-      this.completed = true;
-    }
+    // then
+    StepVerifier.create(result).expectNext("result").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition()).hasTimeout(2);
+  }
+
+  @Test
+  void shouldUseExactTimeoutWhenDurationIsAlreadyFullSeconds() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+
+    var options = TransactionOptions.defaults().withTimeout(Duration.ofSeconds(3));
+
+    // when
+    var result = transaction.inTransaction(options, () -> Mono.just("result"));
+
+    // then
+    StepVerifier.create(result).expectNext("result").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition()).hasTimeout(3);
+  }
+
+  @Test
+  void shouldUseDefaultTimeoutWhenNoTimeoutIsConfigured() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+
+    var options = TransactionOptions.defaults().withoutTimeout();
+
+    // when
+    var result = transaction.inTransaction(options, () -> Mono.just("result"));
+
+    // then
+    StepVerifier.create(result).expectNext("result").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
   }
 }

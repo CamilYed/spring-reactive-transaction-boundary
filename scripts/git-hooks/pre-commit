@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Running Spotless before commit..."
+./gradlew spotlessApply
+
+echo "Adding Spotless changes to commit..."
+git add -u
+
+echo "Spotless completed."

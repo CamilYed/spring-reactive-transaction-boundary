@@ -4,10 +4,10 @@ import org.springframework.transaction.TransactionDefinition;
 
 public final class TransactionDefinitionAssertions {
 
-    private TransactionDefinitionAssertions() {}
+  private TransactionDefinitionAssertions() {}
 
-    public static TransactionDefinitionAssert assertThatTransactionDefinition(
-            TransactionDefinition actual) {
-        return new TransactionDefinitionAssert(actual);
-    }
+  public static TransactionDefinitionAssert assertThatTransactionDefinition(
+      TransactionDefinition actual) {
+    return new TransactionDefinitionAssert(actual);
+  }
 }

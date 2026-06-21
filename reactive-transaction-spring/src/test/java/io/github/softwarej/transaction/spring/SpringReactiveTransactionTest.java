@@ -22,8 +22,8 @@ class SpringReactiveTransactionTest {
   void shouldRejectNullTransactionManager() {
     // when / then
     assertThatThrownBy(() -> new SpringReactiveTransaction(null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("transactionManager must not be null");
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("transactionManager must not be null");
   }
 
   @Test
@@ -34,8 +34,8 @@ class SpringReactiveTransactionTest {
 
     // when / then
     assertThatThrownBy(() -> transaction.inTransaction(null, operation))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("options must not be null");
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("options must not be null");
   }
 
   @Test
@@ -45,8 +45,8 @@ class SpringReactiveTransactionTest {
 
     // when / then
     assertThatThrownBy(() -> transaction.inTransaction(TransactionOptions.defaults(), null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("operation must not be null");
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("operation must not be null");
   }
 
   @Test
@@ -57,12 +57,12 @@ class SpringReactiveTransactionTest {
 
     // when
     var result =
-            transaction.inTransaction(
-                    TransactionOptions.defaults(),
-                    () -> {
-                      operationCreated.set(true);
-                      return Mono.just("result");
-                    });
+        transaction.inTransaction(
+            TransactionOptions.defaults(),
+            () -> {
+              operationCreated.set(true);
+              return Mono.just("result");
+            });
 
     // then
     assertThat(operationCreated).isFalse();
@@ -79,7 +79,8 @@ class SpringReactiveTransactionTest {
     var transaction = new SpringReactiveTransaction(transactionManager);
 
     // when
-    var result = transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.just("result"));
+    var result =
+        transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.just("result"));
 
     // then
     StepVerifier.create(result).expectNext("result").verifyComplete();
@@ -97,12 +98,13 @@ class SpringReactiveTransactionTest {
     var failure = new IllegalStateException("operation failed");
 
     // when
-    var result = transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.error(failure));
+    var result =
+        transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.error(failure));
 
     // then
     StepVerifier.create(result)
-            .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
-            .verify();
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+        .verify();
 
     assertThat(transactionManager.startedTransactions()).isEqualTo(1);
     assertThat(transactionManager.committedTransactions()).isZero();
@@ -116,16 +118,17 @@ class SpringReactiveTransactionTest {
     var transaction = new SpringReactiveTransaction(transactionManager);
 
     // when
-    var result = transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.just("result"));
+    var result =
+        transaction.inTransaction(TransactionOptions.defaults(), () -> Mono.just("result"));
 
     // then
     StepVerifier.create(result).expectNext("result").verifyComplete();
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
-            .hasIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT)
-            .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED)
-            .isReadWrite()
-            .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED)
+        .isReadWrite()
+        .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
   }
 
   @Test
@@ -135,11 +138,11 @@ class SpringReactiveTransactionTest {
     var transaction = new SpringReactiveTransaction(transactionManager);
 
     var options =
-            TransactionOptions.defaults()
-                    .withIsolation(Isolation.SERIALIZABLE)
-                    .withPropagation(Propagation.REQUIRES_NEW)
-                    .withReadOnly()
-                    .withTimeout(Duration.ofSeconds(5));
+        TransactionOptions.defaults()
+            .withIsolation(Isolation.SERIALIZABLE)
+            .withPropagation(Propagation.REQUIRES_NEW)
+            .withReadOnly()
+            .withTimeout(Duration.ofSeconds(5));
 
     // when
     var result = transaction.inTransaction(options, () -> Mono.just("result"));
@@ -148,10 +151,10 @@ class SpringReactiveTransactionTest {
     StepVerifier.create(result).expectNext("result").verifyComplete();
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
-            .hasIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE)
-            .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
-            .isReadOnly()
-            .hasTimeout(5);
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
+        .isReadOnly()
+        .hasTimeout(5);
   }
 
   @Test
@@ -203,6 +206,6 @@ class SpringReactiveTransactionTest {
     StepVerifier.create(result).expectNext("result").verifyComplete();
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
-            .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
+        .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
   }
 }

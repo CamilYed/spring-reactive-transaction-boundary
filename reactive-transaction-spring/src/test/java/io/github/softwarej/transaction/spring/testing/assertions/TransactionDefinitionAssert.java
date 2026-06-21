@@ -4,68 +4,65 @@ import org.assertj.core.api.AbstractAssert;
 import org.springframework.transaction.TransactionDefinition;
 
 public final class TransactionDefinitionAssert
-        extends AbstractAssert<TransactionDefinitionAssert, TransactionDefinition> {
+    extends AbstractAssert<TransactionDefinitionAssert, TransactionDefinition> {
 
-    TransactionDefinitionAssert(TransactionDefinition actual) {
-        super(actual, TransactionDefinitionAssert.class);
+  TransactionDefinitionAssert(TransactionDefinition actual) {
+    super(actual, TransactionDefinitionAssert.class);
+  }
+
+  public TransactionDefinitionAssert hasIsolationLevel(int expectedIsolationLevel) {
+    isNotNull();
+
+    if (actual.getIsolationLevel() != expectedIsolationLevel) {
+      failWithMessage(
+          "Expected transaction isolation level to be <%s> but was <%s>",
+          expectedIsolationLevel, actual.getIsolationLevel());
     }
 
-    public TransactionDefinitionAssert hasIsolationLevel(int expectedIsolationLevel) {
-        isNotNull();
+    return this;
+  }
 
-        if (actual.getIsolationLevel() != expectedIsolationLevel) {
-            failWithMessage(
-                    "Expected transaction isolation level to be <%s> but was <%s>",
-                    expectedIsolationLevel,
-                    actual.getIsolationLevel());
-        }
+  public TransactionDefinitionAssert hasPropagationBehavior(int expectedPropagationBehavior) {
+    isNotNull();
 
-        return this;
+    if (actual.getPropagationBehavior() != expectedPropagationBehavior) {
+      failWithMessage(
+          "Expected transaction propagation behavior to be <%s> but was <%s>",
+          expectedPropagationBehavior, actual.getPropagationBehavior());
     }
 
-    public TransactionDefinitionAssert hasPropagationBehavior(int expectedPropagationBehavior) {
-        isNotNull();
+    return this;
+  }
 
-        if (actual.getPropagationBehavior() != expectedPropagationBehavior) {
-            failWithMessage(
-                    "Expected transaction propagation behavior to be <%s> but was <%s>",
-                    expectedPropagationBehavior,
-                    actual.getPropagationBehavior());
-        }
+  public TransactionDefinitionAssert isReadOnly() {
+    isNotNull();
 
-        return this;
+    if (!actual.isReadOnly()) {
+      failWithMessage("Expected transaction definition to be read-only");
     }
 
-    public TransactionDefinitionAssert isReadOnly() {
-        isNotNull();
+    return this;
+  }
 
-        if (!actual.isReadOnly()) {
-            failWithMessage("Expected transaction definition to be read-only");
-        }
+  public TransactionDefinitionAssert isReadWrite() {
+    isNotNull();
 
-        return this;
+    if (actual.isReadOnly()) {
+      failWithMessage("Expected transaction definition to be read-write");
     }
 
-    public TransactionDefinitionAssert isReadWrite() {
-        isNotNull();
+    return this;
+  }
 
-        if (actual.isReadOnly()) {
-            failWithMessage("Expected transaction definition to be read-write");
-        }
+  public TransactionDefinitionAssert hasTimeout(int expectedTimeout) {
+    isNotNull();
 
-        return this;
+    if (actual.getTimeout() != expectedTimeout) {
+      failWithMessage(
+          "Expected transaction timeout to be <%s> but was <%s>",
+          expectedTimeout, actual.getTimeout());
     }
 
-    public TransactionDefinitionAssert hasTimeout(int expectedTimeout) {
-        isNotNull();
-
-        if (actual.getTimeout() != expectedTimeout) {
-            failWithMessage(
-                    "Expected transaction timeout to be <%s> but was <%s>",
-                    expectedTimeout,
-                    actual.getTimeout());
-        }
-
-        return this;
-    }
+    return this;
+  }
 }

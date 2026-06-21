@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionDefinition;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -112,6 +113,94 @@ class SpringReactiveTransactionTest {
   }
 
   @Test
+  void shouldRejectNullOptionsForManyOperation() {
+    // given
+    var transaction = new SpringReactiveTransaction(new RecordingReactiveTransactionManager());
+    Supplier<Flux<String>> operation = () -> Flux.just("one", "two");
+
+    // when / then
+    assertThatThrownBy(() -> transaction.inTransactionMany(null, operation))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("options must not be null");
+  }
+
+  @Test
+  void shouldRejectNullManyOperation() {
+    // given
+    var transaction = new SpringReactiveTransaction(new RecordingReactiveTransactionManager());
+
+    // when / then
+    assertThatThrownBy(() -> transaction.inTransactionMany(TransactionOptions.defaults(), null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("operation must not be null");
+  }
+
+  @Test
+  void shouldCreateManyOperationLazily() {
+    // given
+    var transaction = new SpringReactiveTransaction(new RecordingReactiveTransactionManager());
+    var operationCreated = new AtomicBoolean(false);
+
+    // when
+    var result =
+        transaction.inTransactionMany(
+            TransactionOptions.defaults(),
+            () -> {
+              operationCreated.set(true);
+              return Flux.just("one", "two");
+            });
+
+    // then
+    assertThat(operationCreated).isFalse();
+
+    StepVerifier.create(result).expectNext("one", "two").verifyComplete();
+
+    assertThat(operationCreated).isTrue();
+  }
+
+  @Test
+  void shouldReturnManyOperationResultsAndCommitTransaction() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+
+    // when
+    var result =
+        transaction.inTransactionMany(TransactionOptions.defaults(), () -> Flux.just("one", "two"));
+
+    // then
+    StepVerifier.create(result).expectNext("one", "two").verifyComplete();
+
+    assertThat(transactionManager.startedTransactions()).isEqualTo(1);
+    assertThat(transactionManager.committedTransactions()).isEqualTo(1);
+    assertThat(transactionManager.rolledBackTransactions()).isZero();
+  }
+
+  @Test
+  void shouldPropagateManyOperationErrorAndRollbackTransaction() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+    var failure = new IllegalStateException("operation failed");
+
+    // when
+    var result =
+        transaction.inTransactionMany(
+            TransactionOptions.defaults(),
+            () -> Flux.concat(Flux.just("one"), Flux.<String>error(failure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectNext("one")
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+        .verify();
+
+    assertThat(transactionManager.startedTransactions()).isEqualTo(1);
+    assertThat(transactionManager.committedTransactions()).isZero();
+    assertThat(transactionManager.rolledBackTransactions()).isEqualTo(1);
+  }
+
+  @Test
   void shouldApplyDefaultTransactionOptionsToSpringTransactionDefinition() {
     // given
     var transactionManager = new RecordingReactiveTransactionManager();
@@ -123,6 +212,26 @@ class SpringReactiveTransactionTest {
 
     // then
     StepVerifier.create(result).expectNext("result").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED)
+        .isReadWrite()
+        .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
+  }
+
+  @Test
+  void shouldApplyDefaultTransactionOptionsToManySpringTransactionDefinition() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+
+    // when
+    var result =
+        transaction.inTransactionMany(TransactionOptions.defaults(), () -> Flux.just("one", "two"));
+
+    // then
+    StepVerifier.create(result).expectNext("one", "two").verifyComplete();
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
         .hasIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT)
@@ -149,6 +258,32 @@ class SpringReactiveTransactionTest {
 
     // then
     StepVerifier.create(result).expectNext("result").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE)
+        .hasPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
+        .isReadOnly()
+        .hasTimeout(5);
+  }
+
+  @Test
+  void shouldApplyTransactionOptionsToManySpringTransactionDefinition() {
+    // given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+
+    var options =
+        TransactionOptions.defaults()
+            .withIsolation(Isolation.SERIALIZABLE)
+            .withPropagation(Propagation.REQUIRES_NEW)
+            .withReadOnly()
+            .withTimeout(Duration.ofSeconds(5));
+
+    // when
+    var result = transaction.inTransactionMany(options, () -> Flux.just("one", "two"));
+
+    // then
+    StepVerifier.create(result).expectNext("one", "two").verifyComplete();
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
         .hasIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE)

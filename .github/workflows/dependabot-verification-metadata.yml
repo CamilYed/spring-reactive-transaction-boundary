@@ -1,0 +1,55 @@
+name: Dependabot verification metadata
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  update-verification-metadata:
+    name: Update Gradle verification metadata
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Dependabot branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287 # v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@90ddb51e90a5fd9ba75f40cf85156b7b41bf76a3 # v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Update verification metadata
+        run: |
+          ./gradlew --write-verification-metadata sha256 --refresh-dependencies spotlessCheck
+          ./gradlew --write-verification-metadata sha256 --refresh-dependencies clean build jacocoTestReport
+
+      - name: Commit verification metadata changes
+        run: |
+          if [[ -n "$(git status --porcelain gradle/verification-metadata.xml)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add gradle/verification-metadata.xml
+            git commit -m "Update Gradle verification metadata"
+            git push
+          else
+            echo "No verification metadata changes."
+          fi

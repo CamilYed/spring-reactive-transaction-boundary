@@ -11,6 +11,7 @@ import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -19,6 +20,13 @@ import reactor.core.publisher.Mono;
  * <p>This adapter delegates transaction handling to Spring's {@link ReactiveTransactionManager} and
  * {@link TransactionalOperator}, while keeping application code dependent only on the library-level
  * {@link ReactiveTransaction} API.
+ *
+ * <p>Both single-value and multi-value reactive operations are supported. Single-value operations
+ * are represented by {@link Mono}; multi-value operations are represented by {@link Flux}.
+ *
+ * <p>Operation publishers are created lazily using {@link Mono#defer(Supplier)} and {@link
+ * Flux#defer(Supplier)} so that the reactive pipeline is assembled within the transaction boundary
+ * managed by Spring.
  */
 public final class SpringReactiveTransaction implements ReactiveTransaction {
 
@@ -27,8 +35,9 @@ public final class SpringReactiveTransaction implements ReactiveTransaction {
   /**
    * Creates a new Spring reactive transaction boundary.
    *
-   * @param transactionManager the Spring reactive transaction manager to use
-   * @throws NullPointerException if {@code transactionManager} is null
+   * @param transactionManager the Spring reactive transaction manager used to create, commit, and
+   *     roll back transactions
+   * @throws NullPointerException if {@code transactionManager} is {@code null}
    */
   public SpringReactiveTransaction(ReactiveTransactionManager transactionManager) {
     this.transactionManager =
@@ -36,13 +45,17 @@ public final class SpringReactiveTransaction implements ReactiveTransaction {
   }
 
   /**
-   * Executes the supplied operation within a Spring-managed reactive transaction.
+   * Executes the supplied single-value operation within a Spring-managed reactive transaction.
+   *
+   * <p>The operation is created lazily and then wrapped with Spring's {@link
+   * TransactionalOperator}. The resulting {@link Mono} participates in a transaction configured
+   * from the supplied {@link TransactionOptions}.
    *
    * @param options the transaction options to apply
-   * @param operation the operation to execute within the transaction
+   * @param operation the single-value operation to execute within the transaction
    * @param <T> the result type
    * @return a {@link Mono} emitting the operation result
-   * @throws NullPointerException if {@code options} or {@code operation} is null
+   * @throws NullPointerException if {@code options} or {@code operation} is {@code null}
    */
   @Override
   public <T> Mono<T> inTransaction(TransactionOptions options, Supplier<Mono<T>> operation) {
@@ -53,6 +66,30 @@ public final class SpringReactiveTransaction implements ReactiveTransaction {
         TransactionalOperator.create(transactionManager, toSpringTransactionDefinition(options));
 
     return Mono.defer(operation).as(operator::transactional);
+  }
+
+  /**
+   * Executes the supplied multi-value operation within a Spring-managed reactive transaction.
+   *
+   * <p>The operation is created lazily and then wrapped with Spring's {@link
+   * TransactionalOperator}. The resulting {@link Flux} participates in a transaction configured
+   * from the supplied {@link TransactionOptions}.
+   *
+   * @param options the transaction options to apply
+   * @param operation the multi-value operation to execute within the transaction
+   * @param <T> the result element type
+   * @return a {@link Flux} emitting the operation results
+   * @throws NullPointerException if {@code options} or {@code operation} is {@code null}
+   */
+  @Override
+  public <T> Flux<T> inTransactionMany(TransactionOptions options, Supplier<Flux<T>> operation) {
+    Objects.requireNonNull(options, "options must not be null");
+    Objects.requireNonNull(operation, "operation must not be null");
+
+    TransactionalOperator operator =
+        TransactionalOperator.create(transactionManager, toSpringTransactionDefinition(options));
+
+    return Flux.defer(operation).as(operator::transactional);
   }
 
   private static TransactionDefinition toSpringTransactionDefinition(TransactionOptions options) {

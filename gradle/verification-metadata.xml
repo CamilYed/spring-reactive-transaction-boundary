@@ -6,7 +6,11 @@
       <trusted-artifacts>
          <trust group="org.junit" name="junit-bom" version="5.14.2" file="junit-bom-5.14.2.module"/>
          <trust group="org.junit" name="junit-bom" version="6.0.3" file="junit-bom-6.0.3.module"/>
-      </trusted-artifacts>
+         <trust file=".*-sources[.]jar" regex="true"/>
+         <trust file=".*-javadoc[.]jar" regex="true"/>
+         <trust file="gradle-.*-src[.]zip" regex="true"/>
+         <trust group="org.jetbrains.kotlin" name="kotlin-reflect" version="2.3.21" file="kotlin-reflect-2.3.21.pom"/>
+   </trusted-artifacts>
    </configuration>
    <components>
       <component group="com.diffplug.durian" name="durian-collect" version="1.2.0">

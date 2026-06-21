@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo
+echo "==> Formatting code"
+./gradlew spotlessApply
+
+echo
+echo "==> Running full build with coverage"
+./gradlew clean build jacocoTestReport
+
+echo
+echo "==> Git status"
+git status --short
+
+echo
+echo "==> Done"

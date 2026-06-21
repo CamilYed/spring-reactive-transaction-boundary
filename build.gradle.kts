@@ -12,6 +12,7 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 plugins {
     `maven-publish`
     alias(libs.plugins.spotless) apply false
+    alias(libs.plugins.sonarqube)
 }
 
 allprojects {
@@ -115,5 +116,20 @@ subprojects {
             html.required.set(true)
             csv.required.set(false)
         }
+    }
+}
+
+sonar {
+    properties {
+        property("sonar.projectKey", "CamilYed_spring-reactive-transaction-boundary")
+        property("sonar.organization", "camilyed")
+        property("sonar.host.url", "https://sonarcloud.io")
+        property(
+            "sonar.coverage.jacoco.xmlReportPaths",
+            listOf(
+                "reactive-transaction-api/build/reports/jacoco/test/jacocoTestReport.xml",
+                "reactive-transaction-spring/build/reports/jacoco/test/jacocoTestReport.xml"
+            ).joinToString(",")
+        )
     }
 }

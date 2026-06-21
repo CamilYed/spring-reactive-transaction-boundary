@@ -16,7 +16,7 @@ permissions:
 jobs:
   update-verification-metadata:
     name: Update Gradle verification metadata
-    if: github.actor == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]' || startsWith(github.head_ref, 'dependabot/')
     runs-on: ubuntu-latest
 
     steps:

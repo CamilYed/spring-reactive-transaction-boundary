@@ -128,7 +128,8 @@ sonar {
             "sonar.coverage.jacoco.xmlReportPaths",
             listOf(
                 "reactive-transaction-api/build/reports/jacoco/test/jacocoTestReport.xml",
-                "reactive-transaction-spring/build/reports/jacoco/test/jacocoTestReport.xml"
+                "reactive-transaction-spring/build/reports/jacoco/test/jacocoTestReport.xml",
+                "reactive-transaction-spring-boot-autoconfigure/build/reports/jacoco/test/jacocoTestReport.xml"
             ).joinToString(",")
         )
     }

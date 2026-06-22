@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+./gradlew --write-verification-metadata sha256 --refresh-dependencies \
+  help \
+  :reactive-transaction-api:compileTestJava \
+  :reactive-transaction-spring:compileTestJava
+
+echo "Gradle verification metadata updated."

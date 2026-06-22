@@ -6,7 +6,8 @@ spring-framework = "7.0.8"
 spotless = "8.7.0"
 jacoco = "0.8.15"
 sonarqube = "7.3.1.8318"
-
+testcontainers = "2.0.5"
+r2dbc-postgresql = "1.1.1.RELEASE"
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
@@ -23,3 +24,11 @@ reactor-core = { module = "io.projectreactor:reactor-core", version.ref = "react
 reactor-test = { module = "io.projectreactor:reactor-test", version.ref = "reactor" }
 
 spring-tx = { module = "org.springframework:spring-tx", version.ref = "spring-framework" }
+
+spring-r2dbc = { group = "org.springframework", name = "spring-r2dbc", version.ref = "spring-framework" }
+
+r2dbc-postgresql = { group = "org.postgresql", name = "r2dbc-postgresql", version.ref = "r2dbc-postgresql" }
+
+testcontainers-bom = { group = "org.testcontainers", name = "testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { group = "org.testcontainers", name = "testcontainers-junit-jupiter" }
+testcontainers-postgresql = { group = "org.testcontainers", name = "testcontainers-postgresql" }

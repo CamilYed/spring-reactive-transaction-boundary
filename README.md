@@ -284,6 +284,14 @@ TransactionOptions.serializableNewTransaction()
 
 This is useful for operations that must run in a new transaction with strict isolation.
 
+### Transaction timeout
+
+`TransactionOptions.withTimeout(...)` is delegated to Spring's `TransactionDefinition`.
+
+Database-specific statement timeouts are not configured by this library. For example, PostgreSQL `statement_timeout` is not automatically changed by `TransactionOptions.withTimeout(...)`.
+
+Database-specific timeout diagnostics and configuration may be added in a future Spring Boot autoconfiguration or diagnostics module.
+
 ## Lazy operation creation
 
 Operations are passed as suppliers:

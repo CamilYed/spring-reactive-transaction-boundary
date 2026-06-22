@@ -12,4 +12,11 @@ dependencies {
 
     testImplementation(libs.assertj.core)
     testImplementation(libs.reactor.test)
+
+    testImplementation(libs.spring.r2dbc)
+    testImplementation(libs.r2dbc.postgresql)
+
+    testImplementation(platform(libs.testcontainers.bom))
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
 }

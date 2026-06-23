@@ -1,4 +1,5 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
+import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
@@ -8,6 +9,7 @@ import org.gradle.api.tasks.testing.TestResult
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.plugins.signing.SigningExtension
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
@@ -17,7 +19,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.github.softwarej"
+    group = "io.github.camilyed"
     version = "0.1.0-SNAPSHOT"
 }
 
@@ -25,6 +27,7 @@ subprojects {
     pluginManager.withPlugin("java-library") {
         pluginManager.apply("jacoco")
         pluginManager.apply("maven-publish")
+        pluginManager.apply("signing")
         pluginManager.apply("com.diffplug.spotless")
 
         extensions.configure<JavaPluginExtension> {
@@ -107,7 +110,44 @@ subprojects {
                     name = "localBuild"
                     url = layout.buildDirectory.dir("repo").get().asFile.toURI()
                 }
+
+                maven {
+                    name = "centralSnapshots"
+                    url = uri("https://central.sonatype.com/repository/maven-snapshots/")
+
+                    mavenContent {
+                        snapshotsOnly()
+                    }
+
+                    credentials {
+                        username = providers.gradleProperty("centralUsername")
+                            .orElse(providers.environmentVariable("CENTRAL_USERNAME"))
+                            .orNull
+                        password = providers.gradleProperty("centralPassword")
+                            .orElse(providers.environmentVariable("CENTRAL_PASSWORD"))
+                            .orNull
+                    }
+                }
             }
+        }
+
+        val publishing = extensions.getByType(PublishingExtension::class.java)
+
+        extensions.configure<SigningExtension> {
+            val signingKey = providers.gradleProperty("signingKey")
+                .orElse(providers.environmentVariable("SIGNING_KEY"))
+                .orNull
+            val signingPassword = providers.gradleProperty("signingPassword")
+                .orElse(providers.environmentVariable("SIGNING_PASSWORD"))
+                .orNull
+
+            isRequired = isRemotePublishingRequested()
+
+            if (!signingKey.isNullOrBlank()) {
+                useInMemoryPgpKeys(signingKey, signingPassword)
+            }
+
+            sign(publishing.publications)
         }
     }
 
@@ -197,4 +237,11 @@ fun projectDescription(projectName: String): String =
             "Spring Boot starter for the reactive transaction boundary API."
         else ->
             "Reactive transaction boundary support for Spring applications."
+    }
+
+fun Project.isRemotePublishingRequested(): Boolean =
+    gradle.startParameter.taskNames.any { taskName ->
+        taskName.contains("publish", ignoreCase = true) &&
+                !taskName.contains("MavenLocal", ignoreCase = true) &&
+                !taskName.contains("LocalBuild", ignoreCase = true)
     }

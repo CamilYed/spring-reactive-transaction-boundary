@@ -1,5 +1,7 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.testing.TestDescriptor
 import org.gradle.api.tasks.testing.TestListener
 import org.gradle.api.tasks.testing.TestResult
@@ -10,7 +12,6 @@ import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
-    `maven-publish`
     alias(libs.plugins.spotless) apply false
     alias(libs.plugins.sonarqube)
 }
@@ -23,6 +24,7 @@ allprojects {
 subprojects {
     pluginManager.withPlugin("java-library") {
         pluginManager.apply("jacoco")
+        pluginManager.apply("maven-publish")
         pluginManager.apply("com.diffplug.spotless")
 
         extensions.configure<JavaPluginExtension> {
@@ -57,6 +59,54 @@ subprojects {
                 target("*.md", ".gitignore")
                 trimTrailingWhitespace()
                 endWithNewline()
+            }
+        }
+
+        extensions.configure<PublishingExtension> {
+            publications {
+                create<MavenPublication>("mavenJava") {
+                    from(components["java"])
+
+                    pom {
+                        name.set(project.name)
+                        description.set(projectDescription(project.name))
+                        url.set("https://github.com/CamilYed/spring-reactive-transaction-boundary")
+                        inceptionYear.set("2026")
+
+                        licenses {
+                            license {
+                                name.set("The Apache License, Version 2.0")
+                                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                                distribution.set("repo")
+                            }
+                        }
+
+                        developers {
+                            developer {
+                                id.set("CamilYed")
+                                name.set("CamilYed")
+                                url.set("https://github.com/CamilYed")
+                            }
+                        }
+
+                        scm {
+                            url.set("https://github.com/CamilYed/spring-reactive-transaction-boundary")
+                            connection.set(
+                                "scm:git:git://github.com/CamilYed/spring-reactive-transaction-boundary.git"
+                            )
+                            developerConnection.set(
+                                "scm:git:ssh://git@github.com:CamilYed/spring-reactive-transaction-boundary.git"
+                            )
+                        }
+                    }
+                }
+            }
+
+            repositories {
+                maven {
+                    name = "localBuild"
+                    url = layout.buildDirectory.dir("repo").get().asFile.toURI()
+                }
             }
         }
     }
@@ -134,3 +184,17 @@ sonar {
         )
     }
 }
+
+fun projectDescription(projectName: String): String =
+    when (projectName) {
+        "reactive-transaction-api" ->
+            "Spring-independent reactive transaction boundary API for application code."
+        "reactive-transaction-spring" ->
+            "Spring Framework adapter for the reactive transaction boundary API."
+        "reactive-transaction-spring-boot-autoconfigure" ->
+            "Spring Boot auto-configuration for the reactive transaction boundary API."
+        "reactive-transaction-spring-boot-starter" ->
+            "Spring Boot starter for the reactive transaction boundary API."
+        else ->
+            "Reactive transaction boundary support for Spring applications."
+    }

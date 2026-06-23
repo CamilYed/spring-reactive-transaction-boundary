@@ -23,6 +23,11 @@ import org.springframework.transaction.ReactiveTransactionManager;
 @ConditionalOnClass({ReactiveTransactionManager.class, SpringReactiveTransaction.class})
 public class ReactiveTransactionAutoConfiguration {
 
+  /** Creates a new reactive transaction auto-configuration. */
+  public ReactiveTransactionAutoConfiguration() {
+    // Empty constructor required by Spring Boot auto-configuration.
+  }
+
   /**
    * Creates the default reactive transaction boundary.
    *

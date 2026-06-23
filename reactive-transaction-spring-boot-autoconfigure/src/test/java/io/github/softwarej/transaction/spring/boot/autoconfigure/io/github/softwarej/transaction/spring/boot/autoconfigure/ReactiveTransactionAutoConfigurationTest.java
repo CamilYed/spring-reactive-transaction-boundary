@@ -1,10 +1,11 @@
-package io.github.softwarej.transaction.spring.boot.autoconfigure;
+package io.github.softwarej.transaction.spring.boot.autoconfigure.io.github.softwarej.transaction.spring.boot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.softwarej.transaction.ReactiveTransaction;
 import io.github.softwarej.transaction.TransactionOptions;
 import io.github.softwarej.transaction.spring.SpringReactiveTransaction;
+import io.github.softwarej.transaction.spring.boot.autoconfigure.ReactiveTransactionAutoConfiguration;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -21,6 +22,15 @@ class ReactiveTransactionAutoConfigurationTest {
   private final ApplicationContextRunner contextRunner =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(ReactiveTransactionAutoConfiguration.class));
+
+  @Test
+  void shouldCreateAutoConfigurationInstance() {
+    // when
+    var autoConfiguration = new ReactiveTransactionAutoConfiguration();
+
+    // then
+    assertThat(autoConfiguration).isNotNull();
+  }
 
   @Test
   void shouldCreateReactiveTransactionBeanWhenReactiveTransactionManagerIsAvailable() {

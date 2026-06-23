@@ -91,23 +91,18 @@ The separate `inTransactionMany(...)` method is intentional. Java type erasure m
 
 ## Installation
 
-Maven Central publishing is planned.
+Snapshots are published to the Sonatype Central Portal snapshots repository.
 
-Until the first public release is available, build the project locally:
+For snapshot usage, add the snapshots repository:
 
-```bash
-./gradlew clean build
+```kotlin
+repositories {
+  mavenCentral()
+  maven {
+    url = uri("https://central.sonatype.com/repository/maven-snapshots/")
+  }
+}
 ```
-
-For local Maven usage during development:
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-Then depend on the modules from your local Maven repository.
-
-Example coordinates for local development:
 
 ### Spring Boot starter
 
@@ -115,7 +110,7 @@ For Spring Boot applications, prefer the starter:
 
 ```kotlin
 dependencies {
-  implementation("io.github.softwarej:reactive-transaction-spring-boot-starter:<version>")
+  implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.0-SNAPSHOT")
 }
 ```
 
@@ -129,8 +124,8 @@ Use the Spring adapter directly when you do not want Spring Boot auto-configurat
 
 ```kotlin
 dependencies {
-  implementation("io.github.softwarej:reactive-transaction-api:<version>")
-  implementation("io.github.softwarej:reactive-transaction-spring:<version>")
+    implementation("io.github.camilyed:reactive-transaction-api:0.1.0-SNAPSHOT")
+    implementation("io.github.camilyed:reactive-transaction-spring:0.1.0-SNAPSHOT")
 }
 ```
 
@@ -148,30 +143,30 @@ import reactor.core.publisher.Mono;
 @Service
 final class CreateOrderUseCase {
 
-  private final ReactiveTransaction transaction;
-  private final OrderRepository orderRepository;
-  private final PaymentRepository paymentRepository;
+    private final ReactiveTransaction transaction;
+    private final OrderRepository orderRepository;
+    private final PaymentRepository paymentRepository;
 
-  CreateOrderUseCase(
-      ReactiveTransaction transaction,
-      OrderRepository orderRepository,
-      PaymentRepository paymentRepository) {
-    this.transaction = transaction;
-    this.orderRepository = orderRepository;
-    this.paymentRepository = paymentRepository;
-  }
+    CreateOrderUseCase(
+            ReactiveTransaction transaction,
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository) {
+        this.transaction = transaction;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+    }
 
-  Mono<OrderId> handle(CreateOrder command) {
-    return transaction.inTransaction(
-        () ->
-            orderRepository
-                .save(command.toOrder())
-                .flatMap(
-                    order ->
-                        paymentRepository
-                            .reserveFor(order)
-                            .thenReturn(order.id())));
-  }
+    Mono<OrderId> handle(CreateOrder command) {
+        return transaction.inTransaction(
+                () ->
+                        orderRepository
+                                .save(command.toOrder())
+                                .flatMap(
+                                        order ->
+                                                paymentRepository
+                                                        .reserveFor(order)
+                                                        .thenReturn(order.id())));
+    }
 }
 ```
 
@@ -180,7 +175,7 @@ The auto-configuration backs off when the application provides its own `Reactive
 ```java
 @Bean
 ReactiveTransaction customReactiveTransaction() {
-  return new CustomReactiveTransaction();
+    return new CustomReactiveTransaction();
 }
 ```
 
@@ -198,10 +193,10 @@ import org.springframework.transaction.ReactiveTransactionManager;
 @Configuration
 class TransactionConfiguration {
 
-  @Bean
-  ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
-    return new SpringReactiveTransaction(transactionManager);
-  }
+    @Bean
+    ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
+        return new SpringReactiveTransaction(transactionManager);
+    }
 }
 ```
 
@@ -216,31 +211,31 @@ import reactor.core.publisher.Mono;
 
 final class CreateOrderUseCase {
 
-  private final ReactiveTransaction transaction;
-  private final OrderRepository orderRepository;
-  private final PaymentRepository paymentRepository;
+    private final ReactiveTransaction transaction;
+    private final OrderRepository orderRepository;
+    private final PaymentRepository paymentRepository;
 
-  CreateOrderUseCase(
-      ReactiveTransaction transaction,
-      OrderRepository orderRepository,
-      PaymentRepository paymentRepository) {
-    this.transaction = transaction;
-    this.orderRepository = orderRepository;
-    this.paymentRepository = paymentRepository;
-  }
+    CreateOrderUseCase(
+            ReactiveTransaction transaction,
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository) {
+        this.transaction = transaction;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+    }
 
-  Mono<OrderId> handle(CreateOrder command) {
-    return transaction.inTransaction(
-        TransactionOptions.serializableNewTransaction(),
-        () ->
-            orderRepository
-                .save(command.toOrder())
-                .flatMap(
-                    order ->
-                        paymentRepository
-                            .reserveFor(order)
-                            .thenReturn(order.id())));
-  }
+    Mono<OrderId> handle(CreateOrder command) {
+        return transaction.inTransaction(
+                TransactionOptions.serializableNewTransaction(),
+                () ->
+                        orderRepository
+                                .save(command.toOrder())
+                                .flatMap(
+                                        order ->
+                                                paymentRepository
+                                                        .reserveFor(order)
+                                                        .thenReturn(order.id())));
+    }
 }
 ```
 
@@ -254,26 +249,26 @@ import reactor.core.publisher.Flux;
 
 final class RebuildCustomerProjectionUseCase {
 
-  private final ReactiveTransaction transaction;
-  private final CustomerEventRepository eventRepository;
-  private final CustomerProjectionRepository projectionRepository;
+    private final ReactiveTransaction transaction;
+    private final CustomerEventRepository eventRepository;
+    private final CustomerProjectionRepository projectionRepository;
 
-  RebuildCustomerProjectionUseCase(
-      ReactiveTransaction transaction,
-      CustomerEventRepository eventRepository,
-      CustomerProjectionRepository projectionRepository) {
-    this.transaction = transaction;
-    this.eventRepository = eventRepository;
-    this.projectionRepository = projectionRepository;
-  }
+    RebuildCustomerProjectionUseCase(
+            ReactiveTransaction transaction,
+            CustomerEventRepository eventRepository,
+            CustomerProjectionRepository projectionRepository) {
+        this.transaction = transaction;
+        this.eventRepository = eventRepository;
+        this.projectionRepository = projectionRepository;
+    }
 
-  Flux<CustomerProjection> handle(CustomerId customerId) {
-    return transaction.inTransactionMany(
-        () ->
-            eventRepository
-                .findByCustomerId(customerId)
-                .concatMap(projectionRepository::apply));
-  }
+    Flux<CustomerProjection> handle(CustomerId customerId) {
+        return transaction.inTransactionMany(
+                () ->
+                        eventRepository
+                                .findByCustomerId(customerId)
+                                .concatMap(projectionRepository::apply));
+    }
 }
 ```
 
@@ -298,17 +293,17 @@ The application layer can express the transaction boundary without importing Spr
 ```java
 final class RegisterPaymentUseCase {
 
-  private final ReactiveTransaction transaction;
-  private final PaymentRepository payments;
-  private final Ledger ledger;
+    private final ReactiveTransaction transaction;
+    private final PaymentRepository payments;
+    private final Ledger ledger;
 
-  Mono<PaymentId> handle(RegisterPayment command) {
-    return transaction.inTransaction(
-        () ->
-            payments
-                .save(command.toPayment())
-                .flatMap(payment -> ledger.record(payment).thenReturn(payment.id())));
-  }
+    Mono<PaymentId> handle(RegisterPayment command) {
+        return transaction.inTransaction(
+                () ->
+                        payments
+                                .save(command.toPayment())
+                                .flatMap(payment -> ledger.record(payment).thenReturn(payment.id())));
+    }
 }
 ```
 
@@ -317,7 +312,7 @@ The infrastructure layer wires the implementation manually or through the Spring
 ```java
 @Bean
 ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
-  return new SpringReactiveTransaction(transactionManager);
+    return new SpringReactiveTransaction(transactionManager);
 }
 ```
 
@@ -329,11 +324,11 @@ This keeps the application service focused on workflow and consistency boundarie
 
 ```java
 var options =
-    TransactionOptions.defaults()
-        .withPropagation(Propagation.REQUIRES_NEW)
-        .withIsolation(Isolation.SERIALIZABLE)
-        .withReadOnly()
-        .withTimeout(Duration.ofSeconds(5));
+        TransactionOptions.defaults()
+                .withPropagation(Propagation.REQUIRES_NEW)
+                .withIsolation(Isolation.SERIALIZABLE)
+                .withReadOnly()
+                .withTimeout(Duration.ofSeconds(5));
 ```
 
 Supported options:
@@ -382,7 +377,7 @@ Operations are passed as suppliers:
 
 ```java
 transaction.inTransaction(() -> repository.save(entity));
-transaction.inTransactionMany(() -> repository.findAllForUpdate());
+        transaction.inTransactionMany(() -> repository.findAllForUpdate());
 ```
 
 They are not passed as already-created publishers:
@@ -403,19 +398,19 @@ Application services can be tested without Spring by providing a simple fake `Re
 ```java
 final class ImmediateReactiveTransaction implements ReactiveTransaction {
 
-  @Override
-  public <T> Mono<T> inTransaction(
-      TransactionOptions options,
-      Supplier<Mono<T>> operation) {
-    return operation.get();
-  }
+    @Override
+    public <T> Mono<T> inTransaction(
+            TransactionOptions options,
+            Supplier<Mono<T>> operation) {
+        return operation.get();
+    }
 
-  @Override
-  public <T> Flux<T> inTransactionMany(
-      TransactionOptions options,
-      Supplier<Flux<T>> operation) {
-    return operation.get();
-  }
+    @Override
+    public <T> Flux<T> inTransactionMany(
+            TransactionOptions options,
+            Supplier<Flux<T>> operation) {
+        return operation.get();
+    }
 }
 ```
 

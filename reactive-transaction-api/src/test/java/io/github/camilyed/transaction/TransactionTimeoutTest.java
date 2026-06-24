@@ -10,10 +10,10 @@ class TransactionTimeoutTest {
 
   @Test
   void shouldCreateDefaultTimeout() {
-    // when
+    // Given / When
     var timeout = TransactionTimeout.defaultTimeout();
 
-    // then
+    // Then
     assertThat(timeout.isDefault()).isTrue();
     assertThat(timeout.isFixed()).isFalse();
     assertThat(timeout.duration()).isEmpty();
@@ -22,21 +22,62 @@ class TransactionTimeoutTest {
 
   @Test
   void shouldCreateFixedTimeout() {
-    // given
+    // Given
     var duration = Duration.ofSeconds(5);
 
-    // when
+    // When
     var timeout = TransactionTimeout.of(duration);
 
-    // then
+    // Then
     assertThat(timeout.isDefault()).isFalse();
     assertThat(timeout.isFixed()).isTrue();
     assertThat(timeout.duration()).contains(duration);
   }
 
   @Test
+  void shouldCreateFixedTimeoutWithMinimalPositiveDuration() {
+    // Given
+    var duration = Duration.ofNanos(1);
+
+    // When
+    var timeout = TransactionTimeout.of(duration);
+
+    // Then
+    assertThat(timeout.isFixed()).isTrue();
+    assertThat(timeout.duration()).contains(duration);
+  }
+
+  @Test
+  void shouldRenderFixedTimeoutAsString() {
+    // Given
+    var duration = Duration.ofSeconds(5);
+
+    // When
+    var timeout = TransactionTimeout.of(duration);
+
+    // Then
+    assertThat(timeout).hasToString("TransactionTimeout[PT5S]");
+  }
+
+  @Test
+  void shouldCompareFixedTimeoutsByDuration() {
+    // Given
+    var duration = Duration.ofSeconds(5);
+
+    // When
+    var first = TransactionTimeout.of(duration);
+    var second = TransactionTimeout.of(duration);
+    var different = TransactionTimeout.of(Duration.ofSeconds(10));
+
+    // Then
+    assertThat(first).isEqualTo(second);
+    assertThat(first).hasSameHashCodeAs(second);
+    assertThat(first).isNotEqualTo(different);
+  }
+
+  @Test
   void shouldRejectNullDuration() {
-    // when / then
+    // Given / When / Then
     assertThatThrownBy(() -> TransactionTimeout.of(null))
         .isInstanceOf(NullPointerException.class)
         .hasMessage("timeout duration must not be null");
@@ -44,10 +85,10 @@ class TransactionTimeoutTest {
 
   @Test
   void shouldRejectZeroDuration() {
-    // given
+    // Given
     var duration = Duration.ZERO;
 
-    // when / then
+    // When / Then
     assertThatThrownBy(() -> TransactionTimeout.of(duration))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("timeout duration must be positive");
@@ -55,10 +96,10 @@ class TransactionTimeoutTest {
 
   @Test
   void shouldRejectNegativeDuration() {
-    // given
+    // Given
     var duration = Duration.ofSeconds(-1);
 
-    // when / then
+    // When / Then
     assertThatThrownBy(() -> TransactionTimeout.of(duration))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("timeout duration must be positive");

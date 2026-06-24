@@ -11,7 +11,11 @@ import io.github.camilyed.transaction.spring.testing.fakes.RecordingReactiveTran
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.transaction.TransactionDefinition;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -342,5 +346,91 @@ class SpringReactiveTransactionTest {
 
     assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
         .hasTimeout(TransactionDefinition.TIMEOUT_DEFAULT);
+  }
+
+  @ParameterizedTest
+  @MethodSource("isolationMappings")
+  void shouldMapIsolationToSpringTransactionDefinition(
+      Isolation isolation, int expectedSpringIsolation) {
+    // Given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+    var options = TransactionOptions.defaults().withIsolation(isolation);
+
+    // When
+    var result = transaction.inTransaction(options, () -> Mono.just("ok"));
+
+    // Then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasIsolationLevel(expectedSpringIsolation);
+  }
+
+  @ParameterizedTest
+  @MethodSource("propagationMappings")
+  void shouldMapPropagationToSpringTransactionDefinition(
+      Propagation propagation, int expectedSpringPropagation) {
+    // Given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+    var options = TransactionOptions.defaults().withPropagation(propagation);
+
+    // When
+    var result = transaction.inTransaction(options, () -> Mono.just("ok"));
+
+    // Then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasPropagationBehavior(expectedSpringPropagation);
+  }
+
+  @ParameterizedTest
+  @MethodSource("timeoutMappings")
+  void shouldMapTimeoutToSpringTransactionDefinition(
+      Duration timeout, int expectedSpringTimeoutSeconds) {
+    // Given
+    var transactionManager = new RecordingReactiveTransactionManager();
+    var transaction = new SpringReactiveTransaction(transactionManager);
+    var options = TransactionOptions.defaults().withTimeout(timeout);
+
+    // When
+    var result = transaction.inTransaction(options, () -> Mono.just("ok"));
+
+    // Then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    assertThatTransactionDefinition(transactionManager.lastTransactionDefinition())
+        .hasTimeout(expectedSpringTimeoutSeconds);
+  }
+
+  private static Stream<Arguments> isolationMappings() {
+    return Stream.of(
+        Arguments.of(Isolation.DEFAULT, TransactionDefinition.ISOLATION_DEFAULT),
+        Arguments.of(Isolation.READ_UNCOMMITTED, TransactionDefinition.ISOLATION_READ_UNCOMMITTED),
+        Arguments.of(Isolation.READ_COMMITTED, TransactionDefinition.ISOLATION_READ_COMMITTED),
+        Arguments.of(Isolation.REPEATABLE_READ, TransactionDefinition.ISOLATION_REPEATABLE_READ),
+        Arguments.of(Isolation.SERIALIZABLE, TransactionDefinition.ISOLATION_SERIALIZABLE));
+  }
+
+  private static Stream<Arguments> propagationMappings() {
+    return Stream.of(
+        Arguments.of(Propagation.REQUIRED, TransactionDefinition.PROPAGATION_REQUIRED),
+        Arguments.of(Propagation.REQUIRES_NEW, TransactionDefinition.PROPAGATION_REQUIRES_NEW),
+        Arguments.of(Propagation.SUPPORTS, TransactionDefinition.PROPAGATION_SUPPORTS),
+        Arguments.of(Propagation.MANDATORY, TransactionDefinition.PROPAGATION_MANDATORY),
+        Arguments.of(Propagation.NOT_SUPPORTED, TransactionDefinition.PROPAGATION_NOT_SUPPORTED),
+        Arguments.of(Propagation.NEVER, TransactionDefinition.PROPAGATION_NEVER),
+        Arguments.of(Propagation.NESTED, TransactionDefinition.PROPAGATION_NESTED));
+  }
+
+  private static Stream<Arguments> timeoutMappings() {
+    return Stream.of(
+        Arguments.of(Duration.ofNanos(1), 1),
+        Arguments.of(Duration.ofMillis(999), 1),
+        Arguments.of(Duration.ofSeconds(1), 1),
+        Arguments.of(Duration.ofSeconds(1).plusNanos(1), 2),
+        Arguments.of(Duration.ofSeconds(5), 5));
   }
 }

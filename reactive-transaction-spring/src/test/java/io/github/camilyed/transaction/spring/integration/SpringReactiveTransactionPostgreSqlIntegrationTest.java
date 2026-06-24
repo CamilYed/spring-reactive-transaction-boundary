@@ -6,8 +6,12 @@ import io.github.camilyed.transaction.Isolation;
 import io.github.camilyed.transaction.Propagation;
 import io.github.camilyed.transaction.TransactionOptions;
 import java.time.Duration;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -249,5 +253,97 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
         .verify();
 
     StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @ParameterizedTest
+  @MethodSource("postgresSqlIsolationMappings")
+  void shouldApplyIsolationLevelInPostgreSql(
+      Isolation isolation, String expectedPostgreSqlIsolation) {
+    // given
+    var options = TransactionOptions.defaults().withIsolation(isolation);
+
+    // when
+    var result = transaction.inTransaction(options, this::currentTransactionIsolation);
+
+    // then
+    StepVerifier.create(result).expectNext(expectedPostgreSqlIsolation).verifyComplete();
+  }
+
+  @Test
+  void shouldExecuteSupportsWithoutExistingTransactionInPostgreSql() {
+    // given
+    var supports = TransactionOptions.defaults().withPropagation(Propagation.SUPPORTS);
+
+    // when
+    var result = transaction.inTransaction(supports, () -> insertItem("supports").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("supports").verifyComplete();
+  }
+
+  @Test
+  void shouldFailMandatoryWithoutExistingTransactionInPostgreSql() {
+    // given
+    var mandatory = TransactionOptions.defaults().withPropagation(Propagation.MANDATORY);
+
+    // when
+    var result =
+        transaction.inTransaction(mandatory, () -> insertItem("mandatory").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectError().verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @Test
+  void shouldCommitNotSupportedInnerOperationWhenOuterTransactionRollsBackInPostgreSql() {
+    // given
+    var outerFailure = new IllegalStateException("outer failed");
+    var notSupported = TransactionOptions.defaults().withPropagation(Propagation.NOT_SUPPORTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            notSupported, () -> insertItem("non-transactional").thenReturn("ok")))
+                    .then(Mono.error(outerFailure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(outerFailure))
+        .verify();
+
+    StepVerifier.create(findItemNames()).expectNext("non-transactional").verifyComplete();
+  }
+
+  @Test
+  void shouldFailNeverInsideExistingTransactionInPostgreSql() {
+    // given
+    var never = TransactionOptions.defaults().withPropagation(Propagation.NEVER);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () -> transaction.inTransaction(never, () -> insertItem("never").thenReturn("ok")));
+
+    // then
+    StepVerifier.create(result).expectError().verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  private static Stream<Arguments> postgresSqlIsolationMappings() {
+    return Stream.of(
+        Arguments.of(Isolation.DEFAULT, "read committed"),
+        Arguments.of(Isolation.READ_UNCOMMITTED, "read uncommitted"),
+        Arguments.of(Isolation.READ_COMMITTED, "read committed"),
+        Arguments.of(Isolation.REPEATABLE_READ, "repeatable read"),
+        Arguments.of(Isolation.SERIALIZABLE, "serializable"));
   }
 }

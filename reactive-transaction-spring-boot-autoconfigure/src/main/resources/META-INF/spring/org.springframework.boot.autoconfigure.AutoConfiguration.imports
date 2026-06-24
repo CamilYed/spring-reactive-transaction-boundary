@@ -1,1 +1,1 @@
-io.github.softwarej.transaction.spring.boot.autoconfigure.ReactiveTransactionAutoConfiguration
+io.github.camilyed.transaction.spring.boot.autoconfigure.ReactiveTransactionAutoConfiguration

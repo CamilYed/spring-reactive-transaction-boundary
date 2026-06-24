@@ -136,7 +136,7 @@ dependencies {
 When the starter is on the classpath, the application can inject `ReactiveTransaction` directly:
 
 ```java
-import io.github.softwarej.transaction.ReactiveTransaction;
+import io.github.camilyed.transaction.ReactiveTransaction;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -184,8 +184,8 @@ ReactiveTransaction customReactiveTransaction() {
 Register the Spring adapter as an application bean:
 
 ```java
-import io.github.softwarej.transaction.ReactiveTransaction;
-import io.github.softwarej.transaction.spring.SpringReactiveTransaction;
+import io.github.camilyed.transaction.ReactiveTransaction;
+import io.github.camilyed.transaction.spring.SpringReactiveTransaction;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.ReactiveTransactionManager;
@@ -205,8 +205,8 @@ The rest of the application depends on `ReactiveTransaction`, not on `Transactio
 ### Application service with `Mono`
 
 ```java
-import io.github.softwarej.transaction.ReactiveTransaction;
-import io.github.softwarej.transaction.TransactionOptions;
+import io.github.camilyed.transaction.ReactiveTransaction;
+import io.github.camilyed.transaction.TransactionOptions;
 import reactor.core.publisher.Mono;
 
 final class CreateOrderUseCase {
@@ -244,7 +244,7 @@ final class CreateOrderUseCase {
 Use `inTransactionMany(...)` when the operation returns multiple values:
 
 ```java
-import io.github.softwarej.transaction.ReactiveTransaction;
+import io.github.camilyed.transaction.ReactiveTransaction;
 import reactor.core.publisher.Flux;
 
 final class RebuildCustomerProjectionUseCase {

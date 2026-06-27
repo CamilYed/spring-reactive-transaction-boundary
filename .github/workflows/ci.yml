@@ -62,4 +62,10 @@ jobs:
             --dependency reactive-transaction-spring-boot-starter \
             --configuration runtimeClasspath
 
-          ./gradlew clean test --refresh-dependencies --stacktrace
+          ./gradlew clean test --refresh-dependencies --stacktrace || {
+            echo "========== TEST XML REPORTS =========="
+            find build/test-results/test -name "*.xml" -print -exec cat {} \;
+            echo "========== CONDITION REPORT HINTS =========="
+            find build/reports/tests/test -type f -name "*.html" -print
+            exit 1
+          }

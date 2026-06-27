@@ -49,7 +49,17 @@ jobs:
       - name: Run SonarCloud analysis
         if: env.SONAR_TOKEN != ''
         run: ./gradlew sonar --info
-        
+
       - name: Test WebFlux R2DBC DDD demo
         working-directory: examples/spring-boot-webflux-r2dbc-ddd-demo
-        run: ./gradlew clean test --refresh-dependencies
+        run: |
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/io.github.camilyed/reactive-transaction-api
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/io.github.camilyed/reactive-transaction-spring
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/io.github.camilyed/reactive-transaction-spring-boot-autoconfigure
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/io.github.camilyed/reactive-transaction-spring-boot-starter
+
+          ./gradlew dependencyInsight \
+            --dependency reactive-transaction-spring-boot-starter \
+            --configuration runtimeClasspath
+
+          ./gradlew clean test --refresh-dependencies --stacktrace

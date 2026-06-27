@@ -1,0 +1,7 @@
+debug: true
+
+logging:
+  level:
+    org.springframework.boot.autoconfigure: DEBUG
+    org.springframework.boot.r2dbc.autoconfigure: DEBUG
+    io.github.camilyed.transaction.spring.boot.autoconfigure: TRACE

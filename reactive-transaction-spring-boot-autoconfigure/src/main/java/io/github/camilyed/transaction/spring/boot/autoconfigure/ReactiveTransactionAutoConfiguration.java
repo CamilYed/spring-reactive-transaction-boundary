@@ -3,6 +3,7 @@ package io.github.camilyed.transaction.spring.boot.autoconfigure;
 import io.github.camilyed.transaction.ReactiveTransaction;
 import io.github.camilyed.transaction.spring.SpringReactiveTransaction;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -20,6 +21,8 @@ import org.springframework.transaction.ReactiveTransactionManager;
  * SpringReactiveTransaction}.
  */
 @AutoConfiguration
+@AutoConfigureAfter(
+    name = "org.springframework.boot.r2dbc.autoconfigure.R2dbcTransactionManagerAutoConfiguration")
 @ConditionalOnClass({ReactiveTransactionManager.class, SpringReactiveTransaction.class})
 public class ReactiveTransactionAutoConfiguration {
 

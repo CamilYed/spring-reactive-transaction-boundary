@@ -4,96 +4,127 @@
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=CamilYed_spring-reactive-transaction-boundary)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://openjdk.org/projects/jdk/21/)
+[![Spring](https://img.shields.io/badge/Spring-Reactive-green.svg)](https://spring.io/projects/spring-framework)
+[![Reactor](https://img.shields.io/badge/Reactor-Mono%20%7C%20Flux-blueviolet.svg)](https://projectreactor.io/)
 
 Application-level transaction boundary API for reactive Spring applications.
 
-Spring Reactive Transaction Boundary provides a small Java API for executing Reactor `Mono` and `Flux` operations inside a transaction without exposing Spring's `TransactionalOperator` to application services, use cases, or domain-facing code.
+`spring-reactive-transaction-boundary` lets application services run Reactor `Mono` and `Flux` workflows inside Spring-managed transactions without depending directly on Spring's `TransactionalOperator`.
 
-The library is intended for WebFlux and R2DBC applications that prefer explicit application-layer transaction boundaries over direct infrastructure usage in business workflows.
+It is designed for Spring WebFlux and R2DBC applications that want explicit, programmatic transaction boundaries while keeping infrastructure APIs out of use cases, domain-facing services, and Clean/Hexagonal Architecture application layers.
+
+## Why this exists
+
+Spring already provides excellent reactive transaction support through `TransactionalOperator`.
+
+However, using `TransactionalOperator` directly in application services makes the use case depend on Spring transaction infrastructure:
+
+```java
+final class CreateOrderUseCase {
+
+  private final TransactionalOperator transactionalOperator;
+  private final OrderRepository orderRepository;
+  private final PaymentRepository paymentRepository;
+
+  Mono<OrderId> handle(CreateOrder command) {
+    return orderRepository
+        .save(command.toOrder())
+        .flatMap(order -> paymentRepository.reserveFor(order).thenReturn(order.id()))
+        .as(transactionalOperator::transactional);
+  }
+}
+```
+
+This works, but the application layer now knows about Spring's transaction API.
+
+This library moves that infrastructure detail behind a small application-facing abstraction:
+
+```java
+final class CreateOrderUseCase {
+
+  private final ReactiveTransaction transaction;
+  private final OrderRepository orderRepository;
+  private final PaymentRepository paymentRepository;
+
+  Mono<OrderId> handle(CreateOrder command) {
+    return transaction.inTransaction(
+        () ->
+            orderRepository
+                .save(command.toOrder())
+                .flatMap(order -> paymentRepository.reserveFor(order).thenReturn(order.id())));
+  }
+}
+```
+
+The use case still declares the transaction boundary explicitly, but it no longer depends on `TransactionalOperator`.
+
+## Core idea
+
+```text
+Application service
+        |
+        v
+ReactiveTransaction
+        |
+        v
+Spring adapter
+        |
+        v
+ReactiveTransactionManager / TransactionalOperator
+        |
+        v
+R2DBC transaction
+```
+
+Spring remains the transaction engine. The application layer depends on a small boundary interface.
+
+## Features
+
+- Spring-independent public API for application code
+- Spring Framework adapter based on `ReactiveTransactionManager`
+- Spring Boot auto-configuration
+- Dedicated APIs for `Mono` and `Flux`
+- Lazy operation creation through suppliers
+- Transaction options for propagation, isolation, read-only mode, and timeout
+- Test-friendly application services without Spring test context
+- Real PostgreSQL/R2DBC integration coverage with Testcontainers
+- Standalone WebFlux/R2DBC DDD demo application
 
 ## Project status
 
 The project is in active development.
 
-The API is intentionally small and already usable for experiments and internal projects, but it should still be treated as pre-stable until the first public release. Breaking changes may happen before `1.0.0`.
+The API is intentionally small and already usable for experiments, demos, and internal projects. Treat it as pre-stable until the first public release. Breaking changes may happen before `1.0.0`.
 
-## Problem
+Current snapshot version:
 
-Spring Framework already provides reactive transaction support through `TransactionalOperator`. It is a powerful infrastructure API, but using it directly in application services can leak Spring transaction concerns into code that should describe business workflows.
-
-This often leads to application services that know too much about infrastructure:
-
-```java
-final class CreateOrderUseCase {
-
-    private final TransactionalOperator transactionalOperator;
-    private final OrderRepository orderRepository;
-    private final PaymentRepository paymentRepository;
-
-    Mono<OrderId> handle(CreateOrder command) {
-        return orderRepository
-                .save(command.toOrder())
-                .flatMap(order -> paymentRepository.reserve(order).thenReturn(order.id()))
-                .as(transactionalOperator::transactional);
-    }
-}
+```text
+0.1.0-SNAPSHOT
 ```
-
-The code works, but the use case now depends directly on Spring transaction infrastructure. In small applications this may be acceptable. In larger systems, especially those using Clean Architecture, Hexagonal Architecture, or DDD-style application layers, this coupling becomes harder to maintain and harder to test.
-
-## What this library provides
-
-The library introduces one application-facing transaction boundary:
-
-```java
-ReactiveTransaction transaction;
-```
-
-Application code asks for a transaction boundary. The Spring adapter decides how that boundary is implemented.
-
-```java
-return transaction.inTransaction(
-    () ->
-        orderRepository
-        .save(order)
-            .flatMap(savedOrder -> paymentRepository.reserve(savedOrder).thenReturn(savedOrder.id())));
-```
-
-The goal is not to replace Spring transactions. The goal is to keep Spring transaction infrastructure behind an adapter while making transaction boundaries explicit in the application layer.
-
-## Supported reactive types
-
-| Operation type | API method | Reactor type |
-| --- | --- | --- |
-| Single result | `inTransaction(...)` | `Mono<T>` |
-| Multiple results | `inTransactionMany(...)` | `Flux<T>` |
-
-The separate `inTransactionMany(...)` method is intentional. Java type erasure makes overloads based only on `Supplier<Mono<T>>` and `Supplier<Flux<T>>` ambiguous at runtime and difficult to expose cleanly.
-
-## Modules
-
-| Module | Description |
-| --- | --- |
-| `reactive-transaction-api` | Spring-independent public API used by application code. |
-| `reactive-transaction-spring` | Spring Framework adapter based on `ReactiveTransactionManager` and `TransactionalOperator`. |
-| `reactive-transaction-spring-boot-autoconfigure` | Spring Boot auto-configuration for the default `ReactiveTransaction` bean. |
-| `reactive-transaction-spring-boot-starter` | Convenience starter that brings the Spring adapter and auto-configuration together. |
 
 ## Requirements
 
 | Requirement | Version |
 | --- | --- |
 | Java | 21 or newer |
-| Reactor | Provided by project dependencies |
+| Reactor | Provided transitively by Spring/Reactor dependencies |
 | Spring Framework | Required by `reactive-transaction-spring` |
-| Spring Boot | Required by the Spring Boot starter and auto-configuration modules |
+| Spring Boot | Required by the starter and auto-configuration modules |
 | Build tool | Gradle Wrapper |
+
+## Modules
+
+| Module | Purpose |
+| --- | --- |
+| `reactive-transaction-api` | Spring-independent public API used by application code. |
+| `reactive-transaction-spring` | Spring adapter implemented on top of `ReactiveTransactionManager` and `TransactionalOperator`. |
+| `reactive-transaction-spring-boot-autoconfigure` | Auto-configuration that creates the default `ReactiveTransaction` bean. |
+| `reactive-transaction-spring-boot-starter` | Convenience starter that brings the Spring adapter and auto-configuration together. |
+| `examples/spring-boot-webflux-r2dbc-ddd-demo` | Standalone WebFlux/R2DBC/PostgreSQL demo consuming the published snapshot. |
 
 ## Installation
 
 Snapshots are published to the Sonatype Central Portal snapshots repository.
-
-For snapshot usage, add the snapshots repository:
 
 ```kotlin
 repositories {
@@ -106,7 +137,7 @@ repositories {
 
 ### Spring Boot starter
 
-For Spring Boot applications, prefer the starter:
+For Spring Boot applications, use the starter:
 
 ```kotlin
 dependencies {
@@ -116,7 +147,7 @@ dependencies {
 
 The starter auto-configures a `ReactiveTransaction` bean when a Spring `ReactiveTransactionManager` bean is available.
 
-The application still owns its database driver and R2DBC configuration. For example, a PostgreSQL application still needs its R2DBC driver and connection configuration from Spring Boot or custom infrastructure code.
+Your application still owns its database infrastructure: R2DBC driver, connection configuration, migrations/schema initialization, and transaction manager setup when Spring Boot does not provide one automatically.
 
 ### Manual Spring adapter
 
@@ -124,64 +155,12 @@ Use the Spring adapter directly when you do not want Spring Boot auto-configurat
 
 ```kotlin
 dependencies {
-    implementation("io.github.camilyed:reactive-transaction-api:0.1.0-SNAPSHOT")
-    implementation("io.github.camilyed:reactive-transaction-spring:0.1.0-SNAPSHOT")
+  implementation("io.github.camilyed:reactive-transaction-api:0.1.0-SNAPSHOT")
+  implementation("io.github.camilyed:reactive-transaction-spring:0.1.0-SNAPSHOT")
 }
 ```
 
-## Quick start
-
-### Spring Boot usage
-
-When the starter is on the classpath, the application can inject `ReactiveTransaction` directly:
-
-```java
-import io.github.camilyed.transaction.ReactiveTransaction;
-import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-
-@Service
-final class CreateOrderUseCase {
-
-    private final ReactiveTransaction transaction;
-    private final OrderRepository orderRepository;
-    private final PaymentRepository paymentRepository;
-
-    CreateOrderUseCase(
-            ReactiveTransaction transaction,
-            OrderRepository orderRepository,
-            PaymentRepository paymentRepository) {
-        this.transaction = transaction;
-        this.orderRepository = orderRepository;
-        this.paymentRepository = paymentRepository;
-    }
-
-    Mono<OrderId> handle(CreateOrder command) {
-        return transaction.inTransaction(
-                () ->
-                        orderRepository
-                                .save(command.toOrder())
-                                .flatMap(
-                                        order ->
-                                                paymentRepository
-                                                        .reserveFor(order)
-                                                        .thenReturn(order.id())));
-    }
-}
-```
-
-The auto-configuration backs off when the application provides its own `ReactiveTransaction` bean:
-
-```java
-@Bean
-ReactiveTransaction customReactiveTransaction() {
-    return new CustomReactiveTransaction();
-}
-```
-
-### Manual Spring configuration
-
-Register the Spring adapter as an application bean:
+Then register the adapter yourself:
 
 ```java
 import io.github.camilyed.transaction.ReactiveTransaction;
@@ -193,151 +172,120 @@ import org.springframework.transaction.ReactiveTransactionManager;
 @Configuration
 class TransactionConfiguration {
 
-    @Bean
-    ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
-        return new SpringReactiveTransaction(transactionManager);
-    }
+  @Bean
+  ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
+    return new SpringReactiveTransaction(transactionManager);
+  }
 }
 ```
 
-The rest of the application depends on `ReactiveTransaction`, not on `TransactionalOperator`.
+## Quick start with Spring Boot
 
-### Application service with `Mono`
+Inject `ReactiveTransaction` into an application service:
 
 ```java
 import io.github.camilyed.transaction.ReactiveTransaction;
-import io.github.camilyed.transaction.TransactionOptions;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+@Service
 final class CreateOrderUseCase {
 
-    private final ReactiveTransaction transaction;
-    private final OrderRepository orderRepository;
-    private final PaymentRepository paymentRepository;
+  private final ReactiveTransaction transaction;
+  private final OrderRepository orderRepository;
+  private final PaymentReservationRepository paymentReservations;
 
-    CreateOrderUseCase(
-            ReactiveTransaction transaction,
-            OrderRepository orderRepository,
-            PaymentRepository paymentRepository) {
-        this.transaction = transaction;
-        this.orderRepository = orderRepository;
-        this.paymentRepository = paymentRepository;
-    }
+  CreateOrderUseCase(
+      ReactiveTransaction transaction,
+      OrderRepository orderRepository,
+      PaymentReservationRepository paymentReservations) {
+    this.transaction = transaction;
+    this.orderRepository = orderRepository;
+    this.paymentReservations = paymentReservations;
+  }
 
-    Mono<OrderId> handle(CreateOrder command) {
-        return transaction.inTransaction(
-                TransactionOptions.serializableNewTransaction(),
-                () ->
-                        orderRepository
-                                .save(command.toOrder())
-                                .flatMap(
-                                        order ->
-                                                paymentRepository
-                                                        .reserveFor(order)
-                                                        .thenReturn(order.id())));
-    }
+  Mono<OrderId> handle(CreateOrder command) {
+    return transaction.inTransaction(
+        () -> {
+          var order = Order.newOrder(command.customerId(), command.amount());
+
+          return orderRepository
+              .save(order)
+              .flatMap(
+                  savedOrder ->
+                      paymentReservations.reserveFor(savedOrder)
+                          .thenReturn(savedOrder.id()));
+        });
+  }
 }
 ```
 
-### Application service with `Flux`
+The application service expresses the business workflow and consistency boundary. Spring transaction infrastructure remains behind the adapter.
 
-Use `inTransactionMany(...)` when the operation returns multiple values:
+## `Mono` transactions
+
+Use `inTransaction(...)` for operations that return one value or complete empty:
 
 ```java
-import io.github.camilyed.transaction.ReactiveTransaction;
-import reactor.core.publisher.Flux;
-
-final class RebuildCustomerProjectionUseCase {
-
-    private final ReactiveTransaction transaction;
-    private final CustomerEventRepository eventRepository;
-    private final CustomerProjectionRepository projectionRepository;
-
-    RebuildCustomerProjectionUseCase(
-            ReactiveTransaction transaction,
-            CustomerEventRepository eventRepository,
-            CustomerProjectionRepository projectionRepository) {
-        this.transaction = transaction;
-        this.eventRepository = eventRepository;
-        this.projectionRepository = projectionRepository;
-    }
-
-    Flux<CustomerProjection> handle(CustomerId customerId) {
-        return transaction.inTransactionMany(
-                () ->
-                        eventRepository
-                                .findByCustomerId(customerId)
-                                .concatMap(projectionRepository::apply));
-    }
+Mono<OrderId> handle(CreateOrder command) {
+  return transaction.inTransaction(
+      () ->
+          orderRepository
+              .save(command.toOrder())
+              .flatMap(order -> paymentRepository.reserveFor(order).thenReturn(order.id())));
 }
 ```
 
-## Clean Architecture and Hexagonal Architecture
-
-In Clean Architecture or Hexagonal Architecture, application services should orchestrate use cases and depend on abstractions. Infrastructure details should live at the edge of the system.
-
-A typical dependency direction can look like this:
-
-```text
-application service
-        |
-        v
-ReactiveTransaction   OrderRepository   PaymentRepository
-        |                  |                 |
-        v                  v                 v
-Spring adapter       R2DBC adapter      external adapter
-```
-
-The application layer can express the transaction boundary without importing Spring transaction classes:
+With explicit options:
 
 ```java
-final class RegisterPaymentUseCase {
-
-    private final ReactiveTransaction transaction;
-    private final PaymentRepository payments;
-    private final Ledger ledger;
-
-    Mono<PaymentId> handle(RegisterPayment command) {
-        return transaction.inTransaction(
-                () ->
-                        payments
-                                .save(command.toPayment())
-                                .flatMap(payment -> ledger.record(payment).thenReturn(payment.id())));
-    }
+Mono<OrderId> handle(CreateOrder command) {
+  return transaction.inTransaction(
+      TransactionOptions.serializableNewTransaction(),
+      () ->
+          orderRepository
+              .save(command.toOrder())
+              .flatMap(order -> paymentRepository.reserveFor(order).thenReturn(order.id())));
 }
 ```
 
-The infrastructure layer wires the implementation manually or through the Spring Boot starter:
+## `Flux` transactions
+
+Use `inTransactionMany(...)` for operations that return multiple values:
 
 ```java
-@Bean
-ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
-    return new SpringReactiveTransaction(transactionManager);
+Flux<OrderProjection> rebuild() {
+  return transaction.inTransactionMany(
+      () ->
+          projectionRepository
+              .deleteAll()
+              .thenMany(orderRepository.findAll())
+              .concatMap(projectionRepository::rebuildFrom));
 }
 ```
 
-This keeps the application service focused on workflow and consistency boundaries. Spring remains the transaction engine, but it is no longer part of the use case API.
+The separate method is intentional. Java type erasure makes overloads based only on `Supplier<Mono<T>>` and `Supplier<Flux<T>>` difficult to expose cleanly.
 
 ## Transaction options
 
-`TransactionOptions` allows application code to configure transaction behavior without depending on Spring classes.
+`TransactionOptions` lets application code configure transaction behavior without importing Spring transaction classes.
 
 ```java
 var options =
-        TransactionOptions.defaults()
-                .withPropagation(Propagation.REQUIRES_NEW)
-                .withIsolation(Isolation.SERIALIZABLE)
-                .withReadOnly()
-                .withTimeout(Duration.ofSeconds(5));
+    TransactionOptions.defaults()
+        .withPropagation(Propagation.REQUIRES_NEW)
+        .withIsolation(Isolation.SERIALIZABLE)
+        .withReadOnly()
+        .withTimeout(Duration.ofSeconds(5));
 ```
 
 Supported options:
 
 | Option | Purpose |
 | --- | --- |
-| `Isolation` | Defines the transaction isolation level. |
 | `Propagation` | Defines how the operation participates in an existing transaction context. |
-| `readOnly` | Marks the transaction as read-only where supported by the underlying transaction manager. |
+| `Isolation` | Defines the transaction isolation level. |
+| `readOnly` | Marks the transaction as read-only where supported by the transaction manager. |
 | `timeout` | Defines an explicit transaction timeout or uses the transaction manager default. |
 
 Convenience factory:
@@ -348,95 +296,202 @@ TransactionOptions.serializableNewTransaction()
 
 This is useful for operations that must run in a new transaction with strict isolation.
 
-### Transaction timeout
-
-`TransactionOptions.withTimeout(...)` is delegated to Spring's `TransactionDefinition`.
-
-Database-specific statement timeouts are not configured by this library. For example, PostgreSQL `statement_timeout` is not automatically changed by `TransactionOptions.withTimeout(...)`.
-
-Database-specific timeout diagnostics and configuration may be added in a future Spring Boot autoconfiguration or diagnostics module.
-
-## PostgreSQL and R2DBC
-
-The project includes integration tests against PostgreSQL using R2DBC and Testcontainers.
-
-The tests verify that the Spring adapter works with a real relational database transaction manager, including:
-
-- commit and rollback for `Mono`
-- commit and rollback for `Flux`
-- read-only transaction settings
-- serializable isolation
-- `REQUIRED` and `REQUIRES_NEW` propagation behavior
-- PostgreSQL transaction setting diagnostics
-
-This test coverage is intentionally placed in the Spring adapter module. The public API module remains Spring-independent and database-independent.
-
 ## Lazy operation creation
 
 Operations are passed as suppliers:
 
 ```java
 transaction.inTransaction(() -> repository.save(entity));
-        transaction.inTransactionMany(() -> repository.findAllForUpdate());
+transaction.inTransactionMany(() -> repository.findAllForUpdate());
 ```
 
-They are not passed as already-created publishers:
+Avoid assembling the publisher before entering the transaction boundary:
 
 ```java
 Mono<Entity> operation = repository.save(entity);
+
 transaction.inTransaction(() -> operation);
 ```
 
-The supplier-based API is intentional. It allows the adapter to create the publisher inside the transaction boundary.
+The supplier-based API makes the transaction boundary explicit and allows the adapter to create the reactive pipeline inside the transactional scope.
 
-This is important in reactive code because a pipeline can capture context at assembly time. Creating the pipeline lazily makes the transaction boundary explicit and reduces the risk of assembling part of the operation outside the intended transactional scope.
+This matters in reactive code because context propagation and resource binding happen through the reactive pipeline.
 
-## Testing application code
+## Clean Architecture and Hexagonal Architecture
 
-Application services can be tested without Spring by providing a simple fake `ReactiveTransaction` implementation.
+The application layer can depend on ports and the transaction boundary:
+
+```text
+application service
+        |
+        v
+ReactiveTransaction   OrderRepository   PaymentReservationRepository
+        |                  |                       |
+        v                  v                       v
+Spring adapter       R2DBC adapter           external adapter
+```
+
+The application service does not import Spring transaction APIs:
 
 ```java
-final class ImmediateReactiveTransaction implements ReactiveTransaction {
+final class RegisterPaymentUseCase {
 
-    @Override
-    public <T> Mono<T> inTransaction(
-            TransactionOptions options,
-            Supplier<Mono<T>> operation) {
-        return operation.get();
-    }
+  private final ReactiveTransaction transaction;
+  private final PaymentRepository payments;
+  private final Ledger ledger;
 
-    @Override
-    public <T> Flux<T> inTransactionMany(
-            TransactionOptions options,
-            Supplier<Flux<T>> operation) {
-        return operation.get();
-    }
+  Mono<PaymentId> handle(RegisterPayment command) {
+    return transaction.inTransaction(
+        () ->
+            payments
+                .save(command.toPayment())
+                .flatMap(payment -> ledger.record(payment).thenReturn(payment.id())));
+  }
 }
 ```
 
-This keeps use case tests focused on behavior instead of Spring transaction setup.
+Infrastructure decides how the boundary is implemented:
 
-## Design principles
+```java
+@Bean
+ReactiveTransaction reactiveTransaction(ReactiveTransactionManager transactionManager) {
+  return new SpringReactiveTransaction(transactionManager);
+}
+```
 
-| Principle | Description |
-| --- | --- |
-| Small public API | Keep the application-facing API minimal and explicit. |
-| Spring isolation | Keep Spring-specific types outside `reactive-transaction-api`. |
-| Lazy execution | Create reactive operations inside the transaction boundary. |
-| Programmatic boundary | Support use cases where annotations are not expressive enough. |
-| Testability | Allow application services to be tested without Spring transaction infrastructure. |
-| Reactive-first | Support both `Mono` and `Flux` without blocking APIs. |
-| Boot-friendly | Provide auto-configuration without forcing database drivers into the core API. |
+Or, in Spring Boot, the starter can provide this bean automatically.
+
+## Spring Boot auto-configuration
+
+The starter auto-configures `ReactiveTransaction` when a Spring `ReactiveTransactionManager` is present:
+
+```text
+ReactiveTransactionManager bean exists
+        |
+        v
+ReactiveTransactionAutoConfiguration
+        |
+        v
+ReactiveTransaction bean
+```
+
+The auto-configuration backs off when the application provides its own `ReactiveTransaction` bean:
+
+```java
+@Bean
+ReactiveTransaction customReactiveTransaction() {
+  return new CustomReactiveTransaction();
+}
+```
+
+This keeps the starter safe for applications that need custom behavior.
+
+## R2DBC transaction manager
+
+For R2DBC applications, Spring's transaction engine is typically `R2dbcTransactionManager`.
+
+Depending on your Spring Boot setup, Boot may create it automatically. If not, define it explicitly:
+
+```java
+import io.r2dbc.spi.ConnectionFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.r2dbc.connection.R2dbcTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+
+@Configuration
+class R2dbcTransactionManagerConfiguration {
+
+  @Bean
+  ReactiveTransactionManager reactiveTransactionManager(ConnectionFactory connectionFactory) {
+    return new R2dbcTransactionManager(connectionFactory);
+  }
+}
+```
+
+The library does not create database-specific transaction managers by itself. It adapts an existing Spring `ReactiveTransactionManager`.
+
+## Demo application
+
+A complete standalone demo is available under:
+
+```text
+examples/spring-boot-webflux-r2dbc-ddd-demo
+```
+
+The demo uses:
+
+- Spring Boot WebFlux
+- R2DBC
+- PostgreSQL
+- Testcontainers
+- DDD-style use cases
+- Hexagonal ports and adapters
+- the published `0.1.0-SNAPSHOT` starter from Sonatype Central snapshots
+
+Run the demo tests:
+
+```bash
+cd examples/spring-boot-webflux-r2dbc-ddd-demo
+./gradlew clean test --refresh-dependencies
+```
+
+The demo proves that an external application can consume the remote snapshot and get a `ReactiveTransaction` bean from the Spring Boot starter.
+
+## Testing application code without Spring
+
+Application services can be tested without a Spring context by using a simple fake implementation:
+
+```java
+import io.github.camilyed.transaction.ReactiveTransaction;
+import io.github.camilyed.transaction.TransactionOptions;
+import java.util.function.Supplier;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+final class ImmediateReactiveTransaction implements ReactiveTransaction {
+
+  @Override
+  public <T> Mono<T> inTransaction(TransactionOptions options, Supplier<Mono<T>> operation) {
+    return operation.get();
+  }
+
+  @Override
+  public <T> Flux<T> inTransactionMany(TransactionOptions options, Supplier<Flux<T>> operation) {
+    return operation.get();
+  }
+}
+```
+
+This keeps use case tests focused on business behavior instead of Spring transaction setup.
+
+## PostgreSQL and R2DBC test coverage
+
+The Spring adapter module includes PostgreSQL integration tests with Testcontainers.
+
+The tests verify:
+
+- commit for `Mono`
+- rollback for `Mono`
+- commit for `Flux`
+- rollback for `Flux`
+- read-only transaction options
+- serializable isolation
+- `REQUIRED` propagation
+- `REQUIRES_NEW` propagation
+- PostgreSQL transaction diagnostics
+
+The public API module remains Spring-independent and database-independent.
 
 ## Development
 
-Build the project:
+Build everything:
 
 ```bash
 ./gradlew clean build
 ```
 
-Run all tests:
+Run all root project tests:
 
 ```bash
 ./gradlew test
@@ -448,6 +503,13 @@ Run module tests:
 ./gradlew :reactive-transaction-api:test
 ./gradlew :reactive-transaction-spring:test
 ./gradlew :reactive-transaction-spring-boot-autoconfigure:test
+```
+
+Run the standalone demo tests:
+
+```bash
+cd examples/spring-boot-webflux-r2dbc-ddd-demo
+./gradlew clean test --refresh-dependencies
 ```
 
 Apply formatting:
@@ -462,18 +524,39 @@ Check formatting:
 ./gradlew spotlessCheck
 ```
 
-Run PostgreSQL integration tests:
-
-```bash
-./gradlew :reactive-transaction-spring:test
-```
-
-Docker must be available for Testcontainers-based integration tests.
-
 Generate coverage reports:
 
 ```bash
 ./gradlew jacocoTestReport
+```
+
+Docker must be available for Testcontainers-based integration tests.
+
+## CI
+
+The root build and the standalone demo should both be tested.
+
+Example GitHub Actions steps:
+
+```yaml
+- name: Build root project
+  run: ./gradlew clean build jacocoTestReport
+
+- name: Test WebFlux R2DBC DDD demo
+  working-directory: examples/spring-boot-webflux-r2dbc-ddd-demo
+  run: ./gradlew clean test --refresh-dependencies
+```
+
+The demo step requires Docker because it uses Testcontainers with PostgreSQL.
+
+## Publishing snapshots
+
+Snapshots are published to the Sonatype Central Portal snapshots repository.
+
+Use `--refresh-dependencies` in consumer projects when a fresh timestamped snapshot was published:
+
+```bash
+./gradlew clean test --refresh-dependencies
 ```
 
 ## Optional Git hooks
@@ -494,21 +577,33 @@ Windows PowerShell:
 
 The hook runs `./gradlew spotlessApply` and stages formatting changes before the commit.
 
+## Design principles
+
+| Principle | Description |
+| --- | --- |
+| Small public API | Keep the application-facing API minimal and explicit. |
+| Spring isolation | Keep Spring-specific types outside `reactive-transaction-api`. |
+| Lazy execution | Create reactive operations inside the transaction boundary. |
+| Programmatic boundary | Support use cases where annotations are not expressive enough. |
+| Testability | Allow application services to be tested without Spring transaction infrastructure. |
+| Reactive-first | Support both `Mono` and `Flux` without blocking APIs. |
+| Boot-friendly | Provide auto-configuration without forcing database drivers into the core API. |
+
 ## Roadmap
 
 Near-term work:
 
-- Maven Central publishing
-- More documentation and examples
-- Example Spring Boot WebFlux/R2DBC application
-- Wiki pages for core concepts and Spring Boot usage
+- Publish the first public `0.1.0` release
+- Improve documentation and examples
+- Add wiki pages for Spring Boot usage and transaction options
+- Add more diagnostics around database capabilities and transaction settings
 
 Later ideas:
 
 - Kotlin extension module
 - Kotlin-friendly DSL
-- Database diagnostics and capability detection
 - Database-specific timeout helpers
+- Additional Spring Boot diagnostics
 - Blog article with a real Spring WebFlux/R2DBC use case
 
 ## License

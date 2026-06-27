@@ -28,7 +28,10 @@ spring-r2dbc = { group = "org.springframework", name = "spring-r2dbc", version.r
 r2dbc-postgresql = { group = "org.postgresql", name = "r2dbc-postgresql", version.ref = "r2dbc-postgresql" }
 
 spring-boot-autoconfigure = { group = "org.springframework.boot", name = "spring-boot-autoconfigure", version.ref = "spring-boot" }
+spring-boot-r2dbc = { group = "org.springframework.boot", name = "spring-boot-r2dbc", version.ref = "spring-boot" }
 spring-boot-test = { group = "org.springframework.boot", name = "spring-boot-test", version.ref = "spring-boot" }
+
+r2dbc-h2 = { group = "io.r2dbc", name = "r2dbc-h2", version = "1.0.0.RELEASE" }
 
 testcontainers-bom = { group = "org.testcontainers", name = "testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-junit-jupiter = { group = "org.testcontainers", name = "testcontainers-junit-jupiter" }

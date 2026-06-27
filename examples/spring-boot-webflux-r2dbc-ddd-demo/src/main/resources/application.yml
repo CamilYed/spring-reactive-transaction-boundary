@@ -1,0 +1,9 @@
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/transaction_demo
+    username: transaction_user
+    password: transaction_password
+
+logging:
+  level:
+    io.github.camilyed.transaction.demo: INFO

@@ -49,3 +49,7 @@ jobs:
       - name: Run SonarCloud analysis
         if: env.SONAR_TOKEN != ''
         run: ./gradlew sonar --info
+        
+      - name: Test WebFlux R2DBC DDD demo
+        working-directory: examples/spring-boot-webflux-r2dbc-ddd-demo
+        run: ./gradlew clean test --refresh-dependencies

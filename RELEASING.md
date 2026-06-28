@@ -9,28 +9,28 @@ Before creating a release, make sure the following requirements are met:
 - JDK 21 is available locally and in GitHub Actions.
 - Docker is available for Testcontainers-based integration tests.
 - The Sonatype Central Portal namespace for `io.github.camilyed` is verified.
+- The public PGP key used for signing is uploaded to a keyserver supported by Central Portal.
 - GitHub Actions repository secrets are configured:
-	- `CENTRAL_USERNAME`
-	- `CENTRAL_PASSWORD`
-	- `SIGNING_KEY`
-	- `SIGNING_PASSWORD`
+  - `CENTRAL_USERNAME`
+  - `CENTRAL_PASSWORD`
+  - `SIGNING_KEY`
+  - `SIGNING_PASSWORD`
 
 The Sonatype credentials are Central Portal user-token credentials. They are separate from the GPG
 signing key used to sign Maven artifacts.
 
 ## Release flow
 
-The first release flow is intentionally conservative:
+The release workflow is intentionally conservative by default.
 
-1. Prepare the release metadata in a pull request.
-2. Build a signed Central Portal bundle in GitHub Actions.
-3. Download and manually upload the generated bundle to Sonatype Central Portal.
-4. Publish the validated deployment in Sonatype Central Portal.
-5. Tag the release in Git.
-6. Create a GitHub Release.
+The GitHub Actions `Release` workflow supports two Central Portal publishing modes:
 
-This avoids publishing directly from CI until the manual Central Portal process is verified at least
-once.
+| Mode | Behavior |
+| --- | --- |
+| `USER_MANAGED` | CI uploads the signed bundle to Central Portal and waits until validation passes. The final `Publish` click is manual in Central Portal. |
+| `AUTOMATIC` | CI uploads the signed bundle to Central Portal and Central Portal publishes it automatically after validation succeeds. |
+
+For the first public release, prefer `USER_MANAGED`.
 
 ## Local verification
 
@@ -48,8 +48,8 @@ cd examples/spring-boot-webflux-r2dbc-ddd-demo
 cd ../../..
 ```
 
-The demo is a standalone Gradle project and consumes the published snapshot or release artifacts like
-an external application.
+The demo is a standalone Gradle project and consumes the published artifacts like an external
+application.
 
 ## Build a signed local staging repository
 
@@ -80,51 +80,73 @@ Verify that signatures were generated:
 find build/staging-deploy -name "*.asc" -type f | sort
 ```
 
-## GitHub Actions release bundle
+## Build the Central Portal bundle locally
+
+Use the same packaging command as CI:
+
+```bash
+rm -f build/central-bundle-0.1.0.zip
+
+cd build/staging-deploy
+find io -type f | LC_ALL=C sort | zip -@ ../central-bundle-0.1.0.zip
+cd ../..
+```
+
+Verify the bundle:
+
+```bash
+unzip -Z1 build/central-bundle-0.1.0.zip | head -40
+unzip -Z1 build/central-bundle-0.1.0.zip | grep -Eq '(^\./?$|/$)' && echo "BAD" || echo "OK"
+unzip -Z1 build/central-bundle-0.1.0.zip | grep SNAPSHOT
+```
+
+Expected result:
+
+- entries start with `io/github/camilyed/...`,
+- the root/directory-entry check prints `OK`,
+- the `SNAPSHOT` check prints nothing.
+
+## GitHub Actions release
 
 Use the manual `Release` workflow in GitHub Actions.
 
-Input:
+Inputs:
 
 ```text
-0.1.0
+version: 0.1.0
+publishing_type: USER_MANAGED
 ```
 
-The workflow should:
+The workflow:
 
-1. check out the repository,
-2. set up JDK 21,
-3. run the root build and test suite,
-4. publish all Maven publications to the local staging repository,
-5. sign Maven artifacts,
-6. create a Central Portal bundle,
-7. upload the bundle as a workflow artifact.
+1. builds and tests the project,
+2. signs all Maven publications,
+3. publishes artifacts to a local staging repository,
+4. creates a Central Portal bundle without directory entries,
+5. uploads the bundle as a GitHub Actions artifact,
+6. uploads the bundle to Central Portal through the Publisher API,
+7. waits for Central Portal validation.
 
-The expected artifact name is:
+When `publishing_type` is `USER_MANAGED`, the workflow finishes after Central Portal reaches
+`VALIDATED`.
 
-```text
-central-bundle-0.1.0
-```
+When `publishing_type` is `AUTOMATIC`, the workflow waits until Central Portal reaches `PUBLISHED`.
 
-The expected file inside the artifact is:
+## Publish from Central Portal
 
-```text
-central-bundle-0.1.0.zip
-```
+For the first release, use `USER_MANAGED`.
 
-## Publish to Maven Central
+After the workflow finishes successfully:
 
-Download the generated `central-bundle-0.1.0.zip` from the GitHub Actions run.
+1. open Sonatype Central Portal,
+2. inspect the deployment,
+3. confirm that all components are validated,
+4. click `Publish`.
 
-Upload the bundle in Sonatype Central Portal.
+Do not click `Drop` unless the deployment should be discarded.
 
-After upload:
-
-1. wait for Sonatype validation,
-2. inspect validation errors if any appear,
-3. publish the deployment when validation succeeds.
-
-Do not tag the release before the Central Portal deployment is published successfully.
+After `Publish`, the version is immutable. A failed or flawed public release must be fixed with a
+new version such as `0.1.1`.
 
 ## Tag the release
 
@@ -152,19 +174,11 @@ Use the `CHANGELOG.md` entry as the release notes.
 
 After Maven Central sync is complete, verify the release from a consumer project.
 
-For the demo application, update the dependency from:
-
-```kotlin
-implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.0-SNAPSHOT")
-```
-
-to:
+For the demo application, use:
 
 ```kotlin
 implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.0")
 ```
-
-Remove the snapshots repository if it is no longer needed for the verification.
 
 Then run:
 
@@ -213,6 +227,16 @@ If signing fails or generated signatures are invalid, verify `SIGNING_PASSWORD`.
 
 This must be the passphrase for the GPG private key stored in `SIGNING_KEY`.
 
+### Central Portal cannot find the public PGP key
+
+If Central Portal reports that it cannot find a public key by fingerprint, upload the public key:
+
+```bash
+gpg --keyserver keyserver.ubuntu.com --send-keys FCDB615A724BCF7F4B7C7E195AD19B891B73F9D5
+```
+
+Then wait a few minutes and retry the release workflow.
+
 ### Sonatype authentication fails
 
 If upload or publishing fails with authentication errors, generate a new Central Portal user token
@@ -233,8 +257,14 @@ Use:
 ./gradlew publishAllPublicationsToLocalBuildRepository -PreleaseVersion=0.1.0
 ```
 
-### Demo still resolves a snapshot
+### Bundle contains `./`
 
-The demo intentionally consumes a snapshot before the first release. For post-release verification,
-update the demo dependency to the release version and remove the Sonatype snapshots repository if the
-test should prove Maven Central consumption only.
+Central Portal rejects bundles that contain a root `./` entry or directory entries.
+
+Use:
+
+```bash
+cd build/staging-deploy
+find io -type f | LC_ALL=C sort | zip -@ ../central-bundle-0.1.0.zip
+cd ../..
+```

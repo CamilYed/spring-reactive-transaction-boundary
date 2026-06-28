@@ -7,7 +7,6 @@ import io.github.camilyed.transaction.Propagation;
 import io.github.camilyed.transaction.TransactionOptions;
 import java.time.Duration;
 import java.util.stream.Stream;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -133,7 +132,6 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
   }
 
   @Test
-  @Disabled("R2DBC/PostgreSQL transaction timeout behavior requires separate investigation")
   void shouldTimeoutLongRunningTransactionInPostgreSql() {
     // given
     var options = TransactionOptions.defaults().withTimeout(Duration.ofSeconds(1));
@@ -141,10 +139,14 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
     // when
     var result =
         transaction.inTransaction(
-            options, () -> sleep(Duration.ofSeconds(2)).thenReturn("completed"));
+            options,
+            () ->
+                insertItem("timed-out").then(sleep(Duration.ofSeconds(2))).thenReturn("completed"));
 
     // then
-    StepVerifier.create(result).expectError().verify();
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).hasMessageContaining("statement timeout"))
+        .verify();
 
     StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
   }
@@ -167,7 +169,7 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
             settings -> {
               assertThat(settings.readOnly()).isEqualTo("on");
               assertThat(settings.isolation()).isEqualTo("serializable");
-              assertThat(settings.statementTimeout()).isEqualTo("0");
+              assertThat(settings.statementTimeout()).isEqualTo("5000");
               assertThat(settings.lockTimeout()).isEqualTo("0");
               assertThat(settings.idleTimeout()).isEqualTo("0");
             })
@@ -194,9 +196,23 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
   }
 
   @Test
-  void shouldNotApplyTransactionTimeoutAsPostgreSqlStatementTimeout() {
+  void shouldApplyTransactionTimeoutAsPostgreSqlStatementTimeout() {
     // given
     var options = TransactionOptions.defaults().withTimeout(Duration.ofSeconds(5));
+
+    // when
+    var result = transaction.inTransaction(options, this::currentTransactionSettings);
+
+    // then
+    StepVerifier.create(result)
+        .assertNext(settings -> assertThat(settings.statementTimeout()).isEqualTo("5000"))
+        .verifyComplete();
+  }
+
+  @Test
+  void shouldKeepDefaultPostgreSqlStatementTimeoutWhenNoTransactionTimeoutIsConfigured() {
+    // given
+    var options = TransactionOptions.defaults();
 
     // when
     var result = transaction.inTransaction(options, this::currentTransactionSettings);
@@ -284,6 +300,30 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
   }
 
   @Test
+  void shouldRollbackSupportsInnerTransactionWhenOuterTransactionRollsBackInPostgreSql() {
+    // given
+    var outerFailure = new IllegalStateException("outer failed");
+    var supports = TransactionOptions.defaults().withPropagation(Propagation.SUPPORTS);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            supports, () -> insertItem("supports-inner").thenReturn("ok")))
+                    .then(Mono.error(outerFailure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(outerFailure))
+        .verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @Test
   void shouldFailMandatoryWithoutExistingTransactionInPostgreSql() {
     // given
     var mandatory = TransactionOptions.defaults().withPropagation(Propagation.MANDATORY);
@@ -296,6 +336,30 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
     StepVerifier.create(result).expectError().verify();
 
     StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @Test
+  void shouldExecuteMandatoryInsideExistingTransactionInPostgreSql() {
+    // given
+    var mandatory = TransactionOptions.defaults().withPropagation(Propagation.MANDATORY);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            mandatory, () -> insertItem("mandatory-inner").thenReturn("ok")))
+                    .thenReturn("committed"));
+
+    // then
+    StepVerifier.create(result).expectNext("committed").verifyComplete();
+
+    StepVerifier.create(findItemNames().collectList())
+        .assertNext(
+            names -> assertThat(names).containsExactlyInAnyOrder("outer", "mandatory-inner"))
+        .verifyComplete();
   }
 
   @Test
@@ -323,6 +387,26 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
   }
 
   @Test
+  void shouldCommitNotSupportedOperationWithoutTransactionEvenWhenOperationFailsInPostgreSql() {
+    // given
+    var failure = new IllegalStateException("operation failed");
+    var notSupported = TransactionOptions.defaults().withPropagation(Propagation.NOT_SUPPORTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            notSupported,
+            () -> insertItem("not-supported-failure").then(Mono.<String>error(failure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+        .verify();
+
+    StepVerifier.create(findItemNames()).expectNext("not-supported-failure").verifyComplete();
+  }
+
+  @Test
   void shouldFailNeverInsideExistingTransactionInPostgreSql() {
     // given
     var never = TransactionOptions.defaults().withPropagation(Propagation.NEVER);
@@ -334,6 +418,86 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
 
     // then
     StepVerifier.create(result).expectError().verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @Test
+  void shouldCommitNeverWithoutExistingTransactionInPostgreSql() {
+    // given
+    var never = TransactionOptions.defaults().withPropagation(Propagation.NEVER);
+
+    // when
+    var result = transaction.inTransaction(never, () -> insertItem("never").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("never").verifyComplete();
+  }
+
+  @Test
+  void shouldStartNestedTransactionWithoutExistingTransactionInPostgreSql() {
+    // given
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result = transaction.inTransaction(nested, () -> insertItem("nested").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("nested").verifyComplete();
+  }
+
+  @Test
+  void shouldRollbackNestedInnerTransactionToSavepointAndCommitOuterTransactionInPostgreSql() {
+    // given
+    var innerFailure = new IllegalStateException("inner failed");
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction
+                            .inTransaction(
+                                nested,
+                                () ->
+                                    insertItem("nested-inner")
+                                        .then(Mono.<String>error(innerFailure)))
+                            .onErrorResume(
+                                error -> error == innerFailure ? Mono.empty() : Mono.error(error)))
+                    .thenReturn("outer-committed"));
+
+    // then
+    StepVerifier.create(result).expectNext("outer-committed").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("outer").verifyComplete();
+  }
+
+  @Test
+  void shouldRollbackNestedInnerTransactionWhenOuterTransactionRollsBackInPostgreSql() {
+    // given
+    var outerFailure = new IllegalStateException("outer failed");
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            nested, () -> insertItem("nested-inner").thenReturn("ok")))
+                    .then(Mono.error(outerFailure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(outerFailure))
+        .verify();
 
     StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
   }

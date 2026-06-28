@@ -3,11 +3,13 @@ package io.github.camilyed.transaction.spring.integration;
 import io.github.camilyed.transaction.spring.SpringReactiveTransaction;
 import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import io.r2dbc.spi.Connection;
 import io.r2dbc.spi.ConnectionFactory;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.r2dbc.connection.R2dbcTransactionManager;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.transaction.TransactionDefinition;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -37,7 +39,8 @@ abstract class PostgreSqlR2dbcIntegrationTestSupport {
 
     this.databaseClient = DatabaseClient.create(connectionFactory);
     this.transaction =
-        new SpringReactiveTransaction(new R2dbcTransactionManager(connectionFactory));
+        new SpringReactiveTransaction(
+            new PostgreSqlStatementTimeoutR2dbcTransactionManager(connectionFactory));
 
     recreateSchema();
   }
@@ -89,13 +92,13 @@ abstract class PostgreSqlR2dbcIntegrationTestSupport {
     return databaseClient
         .sql(
             """
-                        SELECT
-                          current_setting('transaction_read_only') AS read_only,
-                          current_setting('transaction_isolation') AS isolation,
-                          current_setting('statement_timeout') AS statement_timeout,
-                          current_setting('lock_timeout') AS lock_timeout,
-                          current_setting('idle_in_transaction_session_timeout') AS idle_timeout
-                        """)
+                    SELECT
+                      current_setting('transaction_read_only') AS read_only,
+                      current_setting('transaction_isolation') AS isolation,
+                      (SELECT setting FROM pg_settings WHERE name = 'statement_timeout') AS statement_timeout,
+                      (SELECT setting FROM pg_settings WHERE name = 'lock_timeout') AS lock_timeout,
+                      (SELECT setting FROM pg_settings WHERE name = 'idle_in_transaction_session_timeout') AS idle_timeout
+                    """)
         .map(
             (row, metadata) ->
                 new PostgreSqlTransactionSettings(
@@ -130,16 +133,47 @@ abstract class PostgreSqlR2dbcIntegrationTestSupport {
 
     execute(
         """
-                CREATE TABLE transaction_items (
-                  id BIGSERIAL PRIMARY KEY,
-                  name VARCHAR(255) NOT NULL
-                )
-                """);
+            CREATE TABLE transaction_items (
+              id BIGSERIAL PRIMARY KEY,
+              name VARCHAR(255) NOT NULL
+            )
+            """);
   }
 
   private void execute(String sql) {
     StepVerifier.create(databaseClient.sql(sql).fetch().rowsUpdated())
         .expectNextCount(1)
         .verifyComplete();
+  }
+
+  private static final class PostgreSqlStatementTimeoutR2dbcTransactionManager
+      extends R2dbcTransactionManager {
+
+    private PostgreSqlStatementTimeoutR2dbcTransactionManager(ConnectionFactory connectionFactory) {
+      super(connectionFactory);
+    }
+
+    @Override
+    protected Mono<Void> prepareTransactionalConnection(
+        Connection connection, TransactionDefinition definition) {
+      return super.prepareTransactionalConnection(connection, definition)
+          .then(applyStatementTimeout(connection, definition));
+    }
+
+    private Mono<Void> applyStatementTimeout(
+        Connection connection, TransactionDefinition definition) {
+      if (definition.getTimeout() == TransactionDefinition.TIMEOUT_DEFAULT) {
+        return Mono.empty();
+      }
+
+      var timeoutMillis = Math.multiplyExact(definition.getTimeout(), 1000L);
+
+      return Mono.from(
+              connection
+                  .createStatement("SET LOCAL statement_timeout = " + timeoutMillis)
+                  .execute())
+          .flatMap(result -> Mono.from(result.getRowsUpdated()))
+          .then();
+    }
   }
 }

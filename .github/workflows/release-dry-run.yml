@@ -34,12 +34,24 @@ jobs:
         run: chmod +x gradlew
 
       - name: Verify project
-        run: ./gradlew spotlessCheck clean build jacocoTestReport
+        run: ./gradlew spotlessCheck clean build jacocoTestReport --stacktrace
 
-      - name: Publish signed artifacts to local repository
-        run: ./gradlew publishAllPublicationsToLocalBuildRepository
+      - name: Publish signed artifacts to local staging repository
+        run: ./gradlew publishAllPublicationsToLocalBuildRepository --stacktrace
 
-      - name: Verify generated signatures
+      - name: Verify generated Maven artifacts and signatures
         run: |
-          find . -path "*/build/repo/*" -type f | sort
-          test "$(find . -path "*/build/repo/*.asc" -type f | wc -l)" -gt 0
+          echo "Generated artifacts:"
+          find build/staging-deploy -type f | sort
+
+          echo "Generated signatures:"
+          find build/staging-deploy -name "*.asc" -type f | sort
+
+          ASC_COUNT="$(find build/staging-deploy -name "*.asc" -type f | wc -l | tr -d ' ')"
+
+          if [ "$ASC_COUNT" -eq 0 ]; then
+            echo "No .asc signature files were generated."
+            exit 1
+          fi
+
+          echo "Signature files generated: $ASC_COUNT"

@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example 0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release-bundle:
+    name: Build signed release bundle
+    runs-on: ubuntu-latest
+
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+      RELEASE_VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Set up Java
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Validate release version
+        run: |
+          if ! printf '%s' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Invalid release version: $RELEASE_VERSION"
+            exit 1
+          fi
+
+      - name: Verify root project
+        run: ./gradlew spotlessCheck clean build jacocoTestReport "-PreleaseVersion=$RELEASE_VERSION" --stacktrace
+
+      - name: Publish signed artifacts to local staging repository
+        run: ./gradlew publishAllPublicationsToLocalBuildRepository "-PreleaseVersion=$RELEASE_VERSION" --stacktrace
+
+      - name: Create Central Portal bundle
+        run: |
+          cd build/staging-deploy
+          zip -r "../central-bundle-$RELEASE_VERSION.zip" .
+
+      - name: Verify release bundle
+        run: |
+          test -f "build/central-bundle-$RELEASE_VERSION.zip"
+
+          echo "Release bundle:"
+          ls -lh "build/central-bundle-$RELEASE_VERSION.zip"
+
+          echo "Staged artifacts:"
+          find build/staging-deploy -type f | sort
+
+          ASC_COUNT="$(find build/staging-deploy -name "*.asc" -type f | wc -l | tr -d ' ')"
+          POM_COUNT="$(find build/staging-deploy -name "*.pom" -type f | wc -l | tr -d ' ')"
+          JAR_COUNT="$(find build/staging-deploy -name "*.jar" -type f | wc -l | tr -d ' ')"
+
+          echo "POM files: $POM_COUNT"
+          echo "JAR files: $JAR_COUNT"
+          echo "ASC signatures: $ASC_COUNT"
+
+          if [ "$POM_COUNT" -eq 0 ]; then
+            echo "No POM files found."
+            exit 1
+          fi
+
+          if [ "$JAR_COUNT" -eq 0 ]; then
+            echo "No JAR files found."
+            exit 1
+          fi
+
+          if [ "$ASC_COUNT" -eq 0 ]; then
+            echo "No signature files found."
+            exit 1
+          fi
+
+          if find build/staging-deploy -path "*SNAPSHOT*" -print | grep -q .; then
+            echo "Snapshot artifacts found in release bundle."
+            exit 1
+          fi
+
+      - name: Upload Central Portal bundle artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: central-bundle-${{ env.RELEASE_VERSION }}
+          path: build/central-bundle-${{ env.RELEASE_VERSION }}.zip

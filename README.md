@@ -1,6 +1,7 @@
 # Spring Reactive Transaction Boundary
 
 [![CI](https://github.com/CamilYed/spring-reactive-transaction-boundary/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CamilYed/spring-reactive-transaction-boundary/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.camilyed/reactive-transaction-spring-boot-starter.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.camilyed/reactive-transaction-spring-boot-starter)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=coverage)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
@@ -51,6 +52,7 @@ interface.
 - [Requirements](#requirements)
 - [Modules](#modules)
 - [Installation](#installation)
+- [Snapshots](#snapshots)
 - [Spring Boot setup](#spring-boot-setup)
 - [Usage](#usage)
 	- [`Mono`](#mono)
@@ -103,13 +105,13 @@ Additional features:
 Current version:
 
 ```text
-0.1.0-SNAPSHOT
+0.1.0
 ```
 
-The project is in active development. The API is intentionally small and usable for experiments,
-demos, and internal projects, but it should be treated as pre-stable until the first public release.
+This is the first public release. The API is intentionally small and suitable for early production
+evaluation, demos, and internal projects.
 
-Breaking changes may happen before `1.0.0`.
+The project is still pre-`1.0.0`, so breaking changes may happen before `1.0.0`.
 
 ## Requirements
 
@@ -133,18 +135,15 @@ PostgreSQL is the first verified database. Other R2DBC databases may work throug
 | `reactive-transaction-spring` | Spring adapter implemented on top of Spring reactive transaction infrastructure. |
 | `reactive-transaction-spring-boot-autoconfigure` | Auto-configuration that creates the default `ReactiveTransaction` bean. |
 | `reactive-transaction-spring-boot-starter` | Convenience starter for Spring Boot applications. |
-| `examples/spring-boot-webflux-r2dbc-ddd-demo` | Standalone WebFlux/R2DBC/PostgreSQL demo consuming the published snapshot. |
+| `examples/spring-boot-webflux-r2dbc-ddd-demo` | Standalone WebFlux/R2DBC/PostgreSQL demo consuming the published release. |
 
 ## Installation
 
-Snapshots are published to the Sonatype Central Portal snapshots repository.
+Artifacts are published to Maven Central.
 
 ```kotlin
 repositories {
   mavenCentral()
-  maven {
-    url = uri("https://central.sonatype.com/repository/maven-snapshots/")
-  }
 }
 ```
 
@@ -152,7 +151,7 @@ repositories {
 
 ```kotlin
 dependencies {
-  implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.0-SNAPSHOT")
+  implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.0")
 }
 ```
 
@@ -169,8 +168,8 @@ Use the adapter directly when you do not want Spring Boot auto-configuration:
 
 ```kotlin
 dependencies {
-  implementation("io.github.camilyed:reactive-transaction-api:0.1.0-SNAPSHOT")
-  implementation("io.github.camilyed:reactive-transaction-spring:0.1.0-SNAPSHOT")
+  implementation("io.github.camilyed:reactive-transaction-api:0.1.0")
+  implementation("io.github.camilyed:reactive-transaction-spring:0.1.0")
 }
 ```
 
@@ -190,6 +189,25 @@ class TransactionConfiguration {
   }
 }
 ```
+
+## Snapshots
+
+Snapshot builds are published to the Sonatype Central Portal snapshots repository.
+
+```kotlin
+repositories {
+  mavenCentral()
+  maven {
+    url = uri("https://central.sonatype.com/repository/maven-snapshots/")
+  }
+}
+
+dependencies {
+  implementation("io.github.camilyed:reactive-transaction-spring-boot-starter:0.1.1-SNAPSHOT")
+}
+```
+
+Use snapshots only for short-lived testing.
 
 ## Spring Boot setup
 
@@ -433,7 +451,7 @@ cd examples/spring-boot-webflux-r2dbc-ddd-demo
 ./gradlew clean test --refresh-dependencies
 ```
 
-The demo proves that an external Spring Boot application can consume the published snapshot and get a
+The demo proves that an external Spring Boot application can consume the published release and get a
 `ReactiveTransaction` bean from the starter.
 
 ## Examples and code map
@@ -526,9 +544,8 @@ Docker must be available for Testcontainers-based integration tests.
 
 Near-term:
 
-- Publish the first public `0.1.0` release
-- Add `CHANGELOG.md`
-- Add `RELEASING.md`
+- Patch releases for the `0.1.x` line
+- Post-release smoke testing from Maven Central
 - Expand documentation for Spring Boot usage and transaction options
 - Keep PostgreSQL as the first verified database target
 

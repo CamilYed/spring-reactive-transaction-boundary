@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
-## [0.1.0] - Unreleased
+## [Unreleased]
+
+### Added
+
+- Nothing yet.
+
+## [0.1.0] - 2026-06-28
 
 ### Added
 
@@ -19,17 +25,20 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Added PostgreSQL verification for commit, rollback, read-only transactions, isolation, propagation, and timeout behavior.
 - Added standalone Spring Boot WebFlux/R2DBC/PostgreSQL DDD demo application.
 - Added SonarCloud, JaCoCo, Spotless, and GitHub Actions CI verification.
-- Added signed release bundle workflow for Maven Central preparation.
+- Added signed Central Portal release workflow with API upload support.
 
 ### Verified
 
 - Verified JDK 21 support.
 - Verified Spring Boot 4.x usage.
+- Verified Spring Framework 7.x usage.
 - Verified PostgreSQL as the first tested R2DBC database target.
 - Verified transaction commit and rollback behavior for `Mono` and `Flux`.
 - Verified propagation, isolation, read-only, and timeout option mapping.
+- Verified Spring Boot auto-configuration creation and backoff behavior.
+- Verified release signing with a public PGP key available to Central Portal validation.
 
 ### Notes
 
-- This is the first public release candidate.
-- The API should be considered pre-`1.0.0`; breaking changes may still happen before `1.0.0`.
+- This is the first public release.
+- The API is pre-`1.0.0`; breaking changes may still happen before `1.0.0`.

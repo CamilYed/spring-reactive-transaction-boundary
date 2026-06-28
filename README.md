@@ -2,13 +2,14 @@
 
 [![CI](https://github.com/CamilYed/spring-reactive-transaction-boundary/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CamilYed/spring-reactive-transaction-boundary/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.camilyed/reactive-transaction-spring-boot-starter.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.camilyed/reactive-transaction-spring-boot-starter)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=coverage)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=CamilYed_spring-reactive-transaction-boundary&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=CamilYed_spring-reactive-transaction-boundary)
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Framework](https://img.shields.io/badge/Spring%20Framework-7.x-6DB33F.svg)](https://spring.io/projects/spring-framework)

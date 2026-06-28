@@ -338,6 +338,157 @@ class SpringReactiveTransactionPostgreSqlIntegrationTest
     StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
   }
 
+  @Test
+  void shouldRollbackSupportsInnerTransactionWhenOuterTransactionRollsBackInPostgreSql() {
+    // given
+    var outerFailure = new IllegalStateException("outer failed");
+    var supports = TransactionOptions.defaults().withPropagation(Propagation.SUPPORTS);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            supports, () -> insertItem("supports-inner").thenReturn("ok")))
+                    .then(Mono.error(outerFailure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(outerFailure))
+        .verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
+  @Test
+  void shouldExecuteMandatoryInsideExistingTransactionInPostgreSql() {
+    // given
+    var mandatory = TransactionOptions.defaults().withPropagation(Propagation.MANDATORY);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            mandatory, () -> insertItem("mandatory-inner").thenReturn("ok")))
+                    .thenReturn("committed"));
+
+    // then
+    StepVerifier.create(result).expectNext("committed").verifyComplete();
+
+    StepVerifier.create(findItemNames().collectList())
+        .assertNext(
+            names -> assertThat(names).containsExactlyInAnyOrder("outer", "mandatory-inner"))
+        .verifyComplete();
+  }
+
+  @Test
+  void shouldCommitNeverWithoutExistingTransactionInPostgreSql() {
+    // given
+    var never = TransactionOptions.defaults().withPropagation(Propagation.NEVER);
+
+    // when
+    var result = transaction.inTransaction(never, () -> insertItem("never").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("never").verifyComplete();
+  }
+
+  @Test
+  void shouldCommitNotSupportedOperationWithoutTransactionEvenWhenOperationFailsInPostgreSql() {
+    // given
+    var failure = new IllegalStateException("operation failed");
+    var notSupported = TransactionOptions.defaults().withPropagation(Propagation.NOT_SUPPORTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            notSupported,
+            () -> insertItem("not-supported-failure").then(Mono.<String>error(failure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(failure))
+        .verify();
+
+    StepVerifier.create(findItemNames()).expectNext("not-supported-failure").verifyComplete();
+  }
+
+  @Test
+  void shouldStartNestedTransactionWithoutExistingTransactionInPostgreSql() {
+    // given
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result = transaction.inTransaction(nested, () -> insertItem("nested").thenReturn("ok"));
+
+    // then
+    StepVerifier.create(result).expectNext("ok").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("nested").verifyComplete();
+  }
+
+  @Test
+  void shouldRollbackNestedInnerTransactionToSavepointAndCommitOuterTransactionInPostgreSql() {
+    // given
+    var innerFailure = new IllegalStateException("inner failed");
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction
+                            .inTransaction(
+                                nested,
+                                () ->
+                                    insertItem("nested-inner")
+                                        .then(Mono.<String>error(innerFailure)))
+                            .onErrorResume(
+                                error ->
+                                    error == innerFailure
+                                        ? Mono.<String>empty()
+                                        : Mono.<String>error(error)))
+                    .thenReturn("outer-committed"));
+
+    // then
+    StepVerifier.create(result).expectNext("outer-committed").verifyComplete();
+
+    StepVerifier.create(findItemNames()).expectNext("outer").verifyComplete();
+  }
+
+  @Test
+  void shouldRollbackNestedInnerTransactionWhenOuterTransactionRollsBackInPostgreSql() {
+    // given
+    var outerFailure = new IllegalStateException("outer failed");
+    var nested = TransactionOptions.defaults().withPropagation(Propagation.NESTED);
+
+    // when
+    var result =
+        transaction.inTransaction(
+            () ->
+                insertItem("outer")
+                    .then(
+                        transaction.inTransaction(
+                            nested, () -> insertItem("nested-inner").thenReturn("ok")))
+                    .then(Mono.error(outerFailure)));
+
+    // then
+    StepVerifier.create(result)
+        .expectErrorSatisfies(error -> assertThat(error).isSameAs(outerFailure))
+        .verify();
+
+    StepVerifier.create(countItems()).expectNext(0L).verifyComplete();
+  }
+
   private static Stream<Arguments> postgresSqlIsolationMappings() {
     return Stream.of(
         Arguments.of(Isolation.DEFAULT, "read committed"),

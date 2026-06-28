@@ -1,0 +1,45 @@
+name: Release Dry Run
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-dry-run:
+    name: Build signed artifacts
+    runs-on: ubuntu-latest
+
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Verify project
+        run: ./gradlew spotlessCheck clean build jacocoTestReport
+
+      - name: Publish signed artifacts to local repository
+        run: ./gradlew publishAllPublicationsToLocalBuildRepository
+
+      - name: Verify generated signatures
+        run: |
+          find . -path "*/build/repo/*" -type f | sort
+          test "$(find . -path "*/build/repo/*.asc" -type f | wc -l)" -gt 0

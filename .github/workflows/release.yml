@@ -21,40 +21,48 @@ jobs:
       CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
       SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+      RELEASE_VERSION: ${{ inputs.version }}
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
         with:
           distribution: temurin
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Validate release version
+        run: |
+          if ! printf '%s' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "Invalid release version: $RELEASE_VERSION"
+            exit 1
+          fi
+
       - name: Verify root project
-        run: ./gradlew spotlessCheck clean build jacocoTestReport -PreleaseVersion=${{ inputs.version }} --stacktrace
+        run: ./gradlew spotlessCheck clean build jacocoTestReport "-PreleaseVersion=$RELEASE_VERSION" --stacktrace
 
       - name: Publish signed artifacts to local staging repository
-        run: ./gradlew publishAllPublicationsToLocalBuildRepository -PreleaseVersion=${{ inputs.version }} --stacktrace
+        run: ./gradlew publishAllPublicationsToLocalBuildRepository "-PreleaseVersion=$RELEASE_VERSION" --stacktrace
 
       - name: Create Central Portal bundle
         run: |
           cd build/staging-deploy
-          zip -r ../central-bundle-${{ inputs.version }}.zip .
+          zip -r "../central-bundle-$RELEASE_VERSION.zip" .
 
       - name: Verify release bundle
         run: |
-          test -f build/central-bundle-${{ inputs.version }}.zip
+          test -f "build/central-bundle-$RELEASE_VERSION.zip"
 
           echo "Release bundle:"
-          ls -lh build/central-bundle-${{ inputs.version }}.zip
+          ls -lh "build/central-bundle-$RELEASE_VERSION.zip"
 
           echo "Staged artifacts:"
           find build/staging-deploy -type f | sort
@@ -88,7 +96,7 @@ jobs:
           fi
 
       - name: Upload Central Portal bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: central-bundle-${{ inputs.version }}
-          path: build/central-bundle-${{ inputs.version }}.zip
+          name: central-bundle-${{ env.RELEASE_VERSION }}
+          path: build/central-bundle-${{ env.RELEASE_VERSION }}.zip

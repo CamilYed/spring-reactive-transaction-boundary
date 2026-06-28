@@ -20,7 +20,9 @@ plugins {
 
 allprojects {
     group = "io.github.camilyed"
-    version = "0.1.0-SNAPSHOT"
+    version = providers.gradleProperty("releaseVersion")
+        .orElse("0.1.0-SNAPSHOT")
+        .get()
 }
 
 subprojects {
@@ -108,7 +110,7 @@ subprojects {
             repositories {
                 maven {
                     name = "localBuild"
-                    url = layout.buildDirectory.dir("repo").get().asFile.toURI()
+                    url = rootProject.layout.buildDirectory.dir("staging-deploy").get().asFile.toURI()
                 }
 
                 maven {

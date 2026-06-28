@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example 0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release-bundle:
+    name: Build signed release bundle
+    runs-on: ubuntu-latest
+
+    env:
+      CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+      CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Verify root project
+        run: ./gradlew spotlessCheck clean build jacocoTestReport -PreleaseVersion=${{ inputs.version }} --stacktrace
+
+      - name: Publish signed artifacts to local staging repository
+        run: ./gradlew publishAllPublicationsToLocalBuildRepository -PreleaseVersion=${{ inputs.version }} --stacktrace
+
+      - name: Create Central Portal bundle
+        run: |
+          cd build/staging-deploy
+          zip -r ../central-bundle-${{ inputs.version }}.zip .
+
+      - name: Verify release bundle
+        run: |
+          test -f build/central-bundle-${{ inputs.version }}.zip
+
+          echo "Release bundle:"
+          ls -lh build/central-bundle-${{ inputs.version }}.zip
+
+          echo "Staged artifacts:"
+          find build/staging-deploy -type f | sort
+
+          ASC_COUNT="$(find build/staging-deploy -name "*.asc" -type f | wc -l | tr -d ' ')"
+          POM_COUNT="$(find build/staging-deploy -name "*.pom" -type f | wc -l | tr -d ' ')"
+          JAR_COUNT="$(find build/staging-deploy -name "*.jar" -type f | wc -l | tr -d ' ')"
+
+          echo "POM files: $POM_COUNT"
+          echo "JAR files: $JAR_COUNT"
+          echo "ASC signatures: $ASC_COUNT"
+
+          if [ "$POM_COUNT" -eq 0 ]; then
+            echo "No POM files found."
+            exit 1
+          fi
+
+          if [ "$JAR_COUNT" -eq 0 ]; then
+            echo "No JAR files found."
+            exit 1
+          fi
+
+          if [ "$ASC_COUNT" -eq 0 ]; then
+            echo "No signature files found."
+            exit 1
+          fi
+
+          if find build/staging-deploy -path "*SNAPSHOT*" -print | grep -q .; then
+            echo "Snapshot artifacts found in release bundle."
+            exit 1
+          fi
+
+      - name: Upload Central Portal bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle-${{ inputs.version }}
+          path: build/central-bundle-${{ inputs.version }}.zip

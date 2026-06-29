@@ -1,5 +1,5 @@
 [versions]
-junit = "6.1.0"
+junit = "6.1.1"
 assertj = "3.27.7"
 reactor = "3.7.9"
 spring-framework = "7.0.8"
